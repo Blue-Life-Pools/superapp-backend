@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ManagementCompany {
+  id         String     @id @default(uuid())
+  name       String     @unique
+  website    String?
+  phone      String?
+  notes      String?
+  properties Property[]
+  contacts   Contact[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Property {
+  id                     String             @id @default(uuid())
+  code                   String?            @unique
+  name                   String
+  leadSource             String?
+  propertyType           String?
+  segment                String?
+  addressLine1           String?
+  city                   String?
+  county                 String?
+  state                  String?
+  zipCode                String?
+  formattedAddress       String?
+  latitude               Decimal?
+  longitude              Decimal?
+  managementCompanyId    String?
+  managementCompany      ManagementCompany? @relation(fields: [managementCompanyId], references: [id])
+  sharepointFolderId     String?
+  sharepointFolderUrl    String?
+  contacts               PropertyContact[]
+  waterBodies            WaterBody[]
+  salesActivities        SalesActivity[]
+  reportIncidents        ReportIncident[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  legacySource           String?
+  legacyRow              Int?
+  maintenanceChiefInfo   String?
+  followUpNotes          String?
+  lifecycleStatus        String             @default("LEAD")
+  serviceStartDate       DateTime?
+  regularMaintenanceData Json?
+  deletedAt              DateTime?
+
+  @@index([lifecycleStatus])
+}
+
+model Contact {
+  id                  String             @id @default(uuid())
+  firstName           String?
+  lastName            String?
+  email               String?
+  phone               String?
+  managementCompanyId String?
+  managementCompany   ManagementCompany? @relation(fields: [managementCompanyId], references: [id])
+  properties          PropertyContact[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model PropertyContact {
+  id         String  @id @default(uuid())
+  propertyId String
+  contactId  String
+  role       String?
+  isPrimary  Boolean @default(false)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, contactId, role])
+}
+
+model WaterBody {
+  id         String  @id @default(uuid())
+  propertyId String
+  name       String
+  type       String
+  size       String?
+  gallons    Int?
+  active     Boolean @default(true)
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChemicalReport {
+  id                    String    @id @default(uuid())
+  serviceDate           DateTime  @db.Date
+  technicianName        String
+  tabsQuantity          Decimal   @default(0) @db.Decimal(12, 2)
+  tabsUnit              String    @default("units")
+  liquidChlorineGallons Decimal   @default(0) @db.Decimal(12, 2)
+  chlorinePowderScoops  Decimal   @default(0) @db.Decimal(12, 2)
+  muriaticAcidGallons   Decimal   @default(0) @db.Decimal(12, 2)
+  shockScoops           Decimal   @default(0) @db.Decimal(12, 2)
+  dePowderBags          Decimal   @default(0) @db.Decimal(12, 2)
+  dePowderUnit          String    @default("bags")
+  bicarbonateScoops     Decimal   @default(0) @db.Decimal(12, 2)
+  stabilizerScoops      Decimal   @default(0) @db.Decimal(12, 2)
+  stabilizerUnit        String    @default("bucket")
+  saltBags              Decimal   @default(0) @db.Decimal(12, 2)
+  phosphatesOunces      Decimal   @default(0) @db.Decimal(12, 2)
+  notes                 String?
+  validationStatus      String    @default("PENDING")
+  excelSyncStatus       String    @default("PENDING_CONFIGURATION")
+  excelSyncedAt         DateTime?
+  excelSyncError        String?
+  deletedAt             DateTime?
+  deletedByEmail        String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([serviceDate])
+  @@index([technicianName, serviceDate])
+}
+
+model ChemicalTechnician {
+  id             String   @id @default(uuid())
+  name           String   @unique
+  whatsappNumber String   @unique
+  shareToken     String   @unique @default(uuid()) @db.Uuid
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ChemicalOwner {
+  id           String                 @id @default(uuid())
+  name         String
+  email        String                 @unique
+  passwordHash String
+  active       Boolean                @default(true)
+  sessions     ChemicalOwnerSession[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+}
+
+model ChemicalOwnerSession {
+  id        String        @id @default(uuid())
+  tokenHash String        @unique
+  expiresAt DateTime
+  ownerId   String
+  owner     ChemicalOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@index([ownerId, expiresAt])
+}
+
+model SalesActivity {
+  id                       String             @id @default(uuid())
+  propertyId               String
+  type                     String
+  occurredAt               DateTime
+  notes                    String?
+  status                   String             @default("CREATED")
+  sentAt                   DateTime?
+  approvedAt               DateTime?
+  rejectedAt               DateTime?
+  proposalData             Json?
+  emailDraftId             String?
+  emailDraftWebUrl         String?
+  emailDraftCreatedAt      DateTime?
+  emailDraftFileName       String?
+  proposalPdfSharepointId  String?
+  proposalPdfSharepointUrl String?
+  proposalPdfFileName      String?
+  proposalPdfUploadedAt    DateTime?
+  followUps                ProposalFollowUp[]
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model ProposalFollowUp {
+  id              String   @id @default(uuid())
+  salesActivityId String
+  occurredAt      DateTime @default(now())
+  notes           String?
+  channel         String   @default("EMAIL")
+
+  salesActivity SalesActivity @relation(fields: [salesActivityId], references: [id], onDelete: Cascade)
+
+  @@index([salesActivityId, occurredAt])
+}
+
+model HealthTicket {
+  id               String                     @id @default(uuid())
+  ticketNumber     String                     @unique
+  outlookMessageId String                     @unique
+  conversationId   String?
+  subject          String
+  propertyName     String?
+  senderEmail      String?
+  receivedAt       DateTime
+  visitDate        DateTime?
+  priority         String                     @default("MEDIUM")
+  status           String                     @default("NEW")
+  estimateStatus   String                     @default("PENDING")
+  estimateNumber   String?
+  bodyPreview      String?
+  healthData       Json?
+  deletedAt        DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  comments         HealthTicketComment[]
+  reminders        HealthInspectionReminder[]
+
+  @@index([status])
+  @@index([visitDate])
+  @@index([conversationId])
+}
+
+model HealthInspectionReminder {
+  id             String       @id @default(uuid())
+  ticketId       String
+  inspectionDate String
+  daysBefore     Int
+  recipient      String
+  status         String       @default("SUBMITTING")
+  attemptedAt    DateTime     @default(now())
+  acceptedAt     DateTime?
+  error          String?
+  ticket         HealthTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, inspectionDate, daysBefore])
+  @@index([status])
+}
+
+model HealthAdmin {
+  id           String @id @default(uuid())
+  email        String @unique
+  passwordHash String
+}
+
+model HealthTicketComment {
+  id        String       @id @default(uuid())
+  ticketId  String
+  author    String
+  body      String
+  createdAt DateTime     @default(now())
+  ticket    HealthTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model ReportPerson {
+  id                    String           @id @default(uuid())
+  name                  String
+  role                  String
+  active                Boolean          @default(true)
+  color                 String?
+  defaultSupervisorId   String?
+  defaultSupervisor     ReportPerson?    @relation("ReportSupervisorAssignments", fields: [defaultSupervisorId], references: [id], onDelete: SetNull)
+  supervisedTechnicians ReportPerson[]   @relation("ReportSupervisorAssignments")
+  technicianIncidents   ReportIncident[] @relation("ReportIncidentTechnician")
+  supervisorIncidents   ReportIncident[] @relation("ReportIncidentSupervisor")
+  inspectorIncidents    ReportIncident[] @relation("ReportIncidentInspector")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@unique([role, name])
+  @@index([role, active])
+}
+
+model ReportIncidentType {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  color     String?
+  active    Boolean          @default(true)
+  incidents ReportIncident[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model ReportIncident {
+  id                String             @id @default(uuid())
+  occurredAt        DateTime           @db.Date
+  propertyId        String?
+  property          Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyName      String
+  typeId            String
+  type              ReportIncidentType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  importance        String             @default("MEDIUM")
+  description       String
+  technicianId      String
+  technician        ReportPerson       @relation("ReportIncidentTechnician", fields: [technicianId], references: [id], onDelete: Restrict)
+  supervisorId      String
+  supervisor        ReportPerson       @relation("ReportIncidentSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+  requiresInspector Boolean            @default(false)
+  inspectorId       String?
+  inspector         ReportPerson?      @relation("ReportIncidentInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+  status            String             @default("PENDING")
+  resolution        String?
+  solvedAt          DateTime?
+  requiresEstimate  Boolean            @default(false)
+  estimateNumber    String?
+  attachments       ReportAttachment[]
+  uploadSessions    ReportUploadSession[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([occurredAt])
+  @@index([status, occurredAt])
+  @@index([propertyName])
+  @@index([propertyId])
+}
+
+model ReportAttachment {
+  id               String         @id @default(uuid())
+  incidentId       String
+  incident         ReportIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  fileName         String
+  mimeType         String
+  size             Int
+  sharepointItemId String
+  sharepointWebUrl String
+  createdAt        DateTime       @default(now())
+
+  @@index([incidentId, createdAt])
+}
+
+model ReportUploadSession {
+  id               String         @id @default(uuid())
+  incidentId       String
+  incident         ReportIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  uploadUrl        String
+  originalFileName String
+  uploadFileName   String
+  mimeType         String
+  size             Int
+  nextByte         Int            @default(0)
+  expiresAt        DateTime
+  createdAt        DateTime       @default(now())
+
+  @@index([incidentId, createdAt])
+}

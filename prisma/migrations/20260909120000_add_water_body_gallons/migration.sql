@@ -1,0 +1,2 @@
+ALTER TABLE "WaterBody"
+ADD COLUMN "gallons" INTEGER;
