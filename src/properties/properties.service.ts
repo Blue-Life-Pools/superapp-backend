@@ -811,7 +811,7 @@ export class PropertiesService {
       throw new NotFoundException(`No se encontró la propiedad con id ${id}`);
     }
 
-    if (!contacts) {
+    if (contacts === undefined && waterBodies === undefined) {
       return this.prisma.property.update({
         where: { id },
         data: {
@@ -832,39 +832,41 @@ export class PropertiesService {
       });
     }
 
-    const normalizedEmails = contacts.map((contact) =>
-      contact.email.trim().toLowerCase(),
-    );
-
-    if (!contacts.some((contact) => contact.role === 'PROPERTY_MANAGER')) {
-      throw new BadRequestException(
-        'At least one Property Manager contact is required.',
+    if (contacts !== undefined) {
+      const normalizedEmails = contacts.map((contact) =>
+        contact.email.trim().toLowerCase(),
       );
-    }
 
-    if (new Set(normalizedEmails).size !== normalizedEmails.length) {
-      throw new BadRequestException(
-        'Contact email addresses cannot be duplicated.',
+      if (!contacts.some((contact) => contact.role === 'PROPERTY_MANAGER')) {
+        throw new BadRequestException(
+          'At least one Property Manager contact is required.',
+        );
+      }
+
+      if (new Set(normalizedEmails).size !== normalizedEmails.length) {
+        throw new BadRequestException(
+          'Contact email addresses cannot be duplicated.',
+        );
+      }
+
+      if (contacts.filter((contact) => contact.isPrimary).length !== 1) {
+        throw new BadRequestException('Exactly one contact must be primary.');
+      }
+
+      const existingContactIds = new Set(
+        existing.contacts.map((relation) => relation.contactId),
       );
-    }
 
-    if (contacts.filter((contact) => contact.isPrimary).length !== 1) {
-      throw new BadRequestException('Exactly one contact must be primary.');
-    }
-
-    const existingContactIds = new Set(
-      existing.contacts.map((relation) => relation.contactId),
-    );
-
-    if (
-      contacts.some(
-        (contact) =>
-          contact.contactId && !existingContactIds.has(contact.contactId),
-      )
-    ) {
-      throw new BadRequestException(
-        'One or more contacts do not belong to this property.',
-      );
+      if (
+        contacts.some(
+          (contact) =>
+            contact.contactId && !existingContactIds.has(contact.contactId),
+        )
+      ) {
+        throw new BadRequestException(
+          'One or more contacts do not belong to this property.',
+        );
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -887,43 +889,45 @@ export class PropertiesService {
         },
       });
 
-      await tx.propertyContact.deleteMany({
-        where: { propertyId: id },
-      });
-
-      for (const contact of contacts) {
-        let contactId = contact.contactId;
-
-        if (contactId) {
-          await tx.contact.update({
-            where: { id: contactId },
-            data: {
-              firstName: contact.firstName?.trim() || null,
-              lastName: contact.lastName?.trim() || null,
-              email: contact.email.trim().toLowerCase(),
-              phone: contact.phone?.trim() || null,
-            },
-          });
-        } else {
-          const createdContact = await tx.contact.create({
-            data: {
-              firstName: contact.firstName?.trim() || null,
-              lastName: contact.lastName?.trim() || null,
-              email: contact.email.trim().toLowerCase(),
-              phone: contact.phone?.trim() || null,
-            },
-          });
-          contactId = createdContact.id;
-        }
-
-        await tx.propertyContact.create({
-          data: {
-            propertyId: id,
-            contactId,
-            role: contact.role,
-            isPrimary: contact.isPrimary ?? false,
-          },
+      if (contacts !== undefined) {
+        await tx.propertyContact.deleteMany({
+          where: { propertyId: id },
         });
+
+        for (const contact of contacts) {
+          let contactId = contact.contactId;
+
+          if (contactId) {
+            await tx.contact.update({
+              where: { id: contactId },
+              data: {
+                firstName: contact.firstName?.trim() || null,
+                lastName: contact.lastName?.trim() || null,
+                email: contact.email.trim().toLowerCase(),
+                phone: contact.phone?.trim() || null,
+              },
+            });
+          } else {
+            const createdContact = await tx.contact.create({
+              data: {
+                firstName: contact.firstName?.trim() || null,
+                lastName: contact.lastName?.trim() || null,
+                email: contact.email.trim().toLowerCase(),
+                phone: contact.phone?.trim() || null,
+              },
+            });
+            contactId = createdContact.id;
+          }
+
+          await tx.propertyContact.create({
+            data: {
+              propertyId: id,
+              contactId,
+              role: contact.role,
+              isPrimary: contact.isPrimary ?? false,
+            },
+          });
+        }
       }
 
       if (waterBodies !== undefined) {
