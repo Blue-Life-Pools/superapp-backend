@@ -24,6 +24,12 @@ const PROPERTY_CATEGORY_FOLDERS = {
   RESIDENTIAL: '02 Propiedades Residenciales',
 } as const;
 
+const DEFAULT_SHAREPOINT_LOCATION = {
+  hostname: 'bluelifepools.sharepoint.com',
+  sitePath: '/sites/finanzas',
+  libraryName: 'Documentos Propiedades',
+} as const;
+
 @Injectable()
 export class SharePointService {
   private siteId: string | null = null;
@@ -33,14 +39,6 @@ export class SharePointService {
     private readonly config: ConfigService,
     private readonly microsoftGraph: MicrosoftGraphService,
   ) {}
-
-  private required(name: string) {
-    const value = this.config.get<string>(name)?.trim();
-    if (!value) {
-      throw new Error(`Missing SharePoint configuration: ${name}`);
-    }
-    return value;
-  }
 
   private async graph<T>(path: string, init?: RequestInit): Promise<T> {
     return this.microsoftGraph.request<T>(path, init);
@@ -61,11 +59,15 @@ export class SharePointService {
   }
 
   private sharePointLocation() {
-    const configuredHostname = this.required('SHAREPOINT_SITE_HOSTNAME');
+    const configuredHostname =
+      this.config.get<string>('SHAREPOINT_SITE_HOSTNAME')?.trim() ||
+      DEFAULT_SHAREPOINT_LOCATION.hostname;
     let hostname = configuredHostname.replace(/^https?:\/\//i, '');
     hostname = hostname.split('/')[0].trim();
 
-    const configuredSitePath = this.required('SHAREPOINT_SITE_PATH');
+    const configuredSitePath =
+      this.config.get<string>('SHAREPOINT_SITE_PATH')?.trim() ||
+      DEFAULT_SHAREPOINT_LOCATION.sitePath;
     let pathname = configuredSitePath;
     try {
       if (/^https?:\/\//i.test(configuredSitePath)) {
@@ -164,7 +166,9 @@ export class SharePointService {
     const drives = await this.graph<{
       value: GraphDrive[];
     }>(`/sites/${site.id}/drives`);
-    const libraryName = this.required('SHAREPOINT_LIBRARY_NAME');
+    const libraryName =
+      this.config.get<string>('SHAREPOINT_LIBRARY_NAME')?.trim() ||
+      DEFAULT_SHAREPOINT_LOCATION.libraryName;
     const categoryNames = new Set(
       Object.values(PROPERTY_CATEGORY_FOLDERS).map((name) =>
         name.toLocaleLowerCase(),

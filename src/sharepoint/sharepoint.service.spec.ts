@@ -25,7 +25,7 @@ describe('SharePoint property folder routing', () => {
       ),
     } as unknown as ConfigService;
     const request = jest.fn((path: string, init?: RequestInit) => {
-      if (path === '/sites/example.sharepoint.com:/sites/BlueLife') {
+      if (path.startsWith('/sites/') && !path.endsWith('/drives')) {
         return { id: 'site-id' };
       }
       if (path === '/sites/site-id/drives') {
@@ -167,6 +167,26 @@ describe('SharePoint property folder routing', () => {
 
     expect(request).toHaveBeenCalledWith(
       '/drives/drive-id/root/children?$select=id,name,folder',
+      undefined,
+    );
+  });
+
+  it('uses the BlueLife SharePoint location when Vercel settings are empty', async () => {
+    const categoryName = '02 Propiedades Residenciales';
+    const { service, request } = setup(categoryName, '', {
+      SHAREPOINT_SITE_HOSTNAME: '',
+      SHAREPOINT_SITE_PATH: '',
+      SHAREPOINT_LIBRARY_NAME: '',
+    });
+
+    await service.createPropertyFolder(
+      'abc12345-property-id',
+      'Test Property',
+      'RESIDENTIAL',
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      '/sites/bluelifepools.sharepoint.com:/sites/finanzas',
       undefined,
     );
   });
