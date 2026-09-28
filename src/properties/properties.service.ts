@@ -38,6 +38,37 @@ export class PropertiesService {
     private readonly emailDrafts: EmailDraftsService,
   ) {}
 
+  private sharePointProvisioningError(error: unknown) {
+    const detail = error instanceof Error ? error.message : '';
+
+    if (detail.includes('Microsoft authentication failed')) {
+      return 'Microsoft rejected the SharePoint credentials. Update the Microsoft client secret in Vercel.';
+    }
+    if (detail.includes('Missing Microsoft integration configuration')) {
+      return 'The Microsoft connection is incomplete in Vercel.';
+    }
+    if (
+      detail.includes('Missing SharePoint configuration') ||
+      detail.includes('Invalid SharePoint site configuration')
+    ) {
+      return 'The SharePoint site configuration is incomplete or invalid in Vercel.';
+    }
+    if (detail.includes('SharePoint library not found')) {
+      return 'The configured SharePoint document library could not be found.';
+    }
+    if (detail.includes('Microsoft Graph request failed (401)')) {
+      return 'Microsoft rejected the SharePoint connection. Check the credentials in Vercel.';
+    }
+    if (detail.includes('Microsoft Graph request failed (403)')) {
+      return 'The Microsoft application does not have permission to create folders in SharePoint.';
+    }
+    if (detail.includes('Microsoft Graph request failed (404)')) {
+      return 'The configured SharePoint site, library, or parent folder could not be found.';
+    }
+
+    return 'Check the SharePoint connection and try again.';
+  }
+
   findAll() {
     return this.prisma.property.findMany({
       where: {
@@ -273,7 +304,7 @@ export class PropertiesService {
         error instanceof Error ? error.stack : undefined,
       );
       throw new BadGatewayException(
-        'The SharePoint folder could not be created.',
+        `The SharePoint folder could not be created. ${this.sharePointProvisioningError(error)}`,
       );
     }
   }

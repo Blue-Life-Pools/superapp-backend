@@ -14,6 +14,11 @@ type GraphChildrenResponse = {
   value: GraphFolder[];
 };
 
+type GraphDrive = {
+  id: string;
+  name: string;
+};
+
 const PROPERTY_CATEGORY_FOLDERS = {
   COMMERCIAL: '01 Propiedades Comerciales',
   RESIDENTIAL: '02 Propiedades Residenciales',
@@ -53,6 +58,57 @@ export class SharePointService {
         .trim()
         .replace(/[. ]+$/g, '') || fallback
     );
+  }
+
+  private sharePointLocation() {
+    const configuredHostname = this.required('SHAREPOINT_SITE_HOSTNAME');
+    let hostname = configuredHostname.replace(/^https?:\/\//i, '');
+    hostname = hostname.split('/')[0].trim();
+
+    const configuredSitePath = this.required('SHAREPOINT_SITE_PATH');
+    let pathname = configuredSitePath;
+    try {
+      if (/^https?:\/\//i.test(configuredSitePath)) {
+        pathname = new URL(configuredSitePath).pathname;
+      }
+    } catch {
+      // Continue with the configured value so the validation below can report it.
+    }
+
+    pathname = pathname.split('?')[0].replace(/^\/+|\/+$/g, '');
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch {
+      // Keep the original path if it contains a malformed escape sequence.
+    }
+
+    const segments = pathname.split('/').filter(Boolean);
+    const siteRootIndex = segments.findIndex((segment) =>
+      ['sites', 'teams'].includes(segment.toLocaleLowerCase()),
+    );
+    let sitePath: string;
+    let inferredLibraryName: string | undefined;
+
+    if (siteRootIndex >= 0 && segments[siteRootIndex + 1]) {
+      sitePath = `/${segments[siteRootIndex]}/${segments[siteRootIndex + 1]}`;
+      inferredLibraryName = segments[siteRootIndex + 2];
+    } else {
+      const formsIndex = segments.findIndex(
+        (segment) => segment.toLocaleLowerCase() === 'forms',
+      );
+      if (formsIndex >= 2) {
+        sitePath = `/sites/${segments[0]}`;
+        inferredLibraryName = segments[1];
+      } else {
+        sitePath = `/${segments.join('/')}`;
+      }
+    }
+
+    if (!hostname || sitePath === '/') {
+      throw new Error('Invalid SharePoint site configuration.');
+    }
+
+    return { hostname, sitePath, inferredLibraryName };
   }
 
   private propertyCategoryFolder(propertyType: string | null | undefined) {
@@ -100,16 +156,69 @@ export class SharePointService {
       return { siteId: this.siteId, driveId: this.driveId };
     }
 
-    const hostname = this.required('SHAREPOINT_SITE_HOSTNAME');
-    const sitePath = this.required('SHAREPOINT_SITE_PATH');
+    const { hostname, sitePath, inferredLibraryName } =
+      this.sharePointLocation();
     const site = await this.graph<{ id: string }>(
       `/sites/${hostname}:${sitePath}`,
     );
     const drives = await this.graph<{
-      value: Array<{ id: string; name: string }>;
+      value: GraphDrive[];
     }>(`/sites/${site.id}/drives`);
     const libraryName = this.required('SHAREPOINT_LIBRARY_NAME');
-    const drive = drives.value.find((item) => item.name === libraryName);
+    const categoryNames = new Set(
+      Object.values(PROPERTY_CATEGORY_FOLDERS).map((name) =>
+        name.toLocaleLowerCase(),
+      ),
+    );
+    const isLegacyCategoryName = categoryNames.has(
+      libraryName.toLocaleLowerCase(),
+    );
+    let drive = isLegacyCategoryName
+      ? undefined
+      : drives.value.find(
+          (item) =>
+            item.name.toLocaleLowerCase() === libraryName.toLocaleLowerCase(),
+        );
+
+    if (!drive && inferredLibraryName) {
+      drive = drives.value.find(
+        (item) =>
+          item.name.toLocaleLowerCase() ===
+          inferredLibraryName.toLocaleLowerCase(),
+      );
+    }
+
+    if (!drive) {
+      for (const candidate of drives.value) {
+        try {
+          const rootFolders = await this.graph<GraphChildrenResponse>(
+            `/drives/${candidate.id}/root/children?$select=id,name,folder`,
+          );
+          const folderNames = new Set(
+            rootFolders.value
+              .filter((item) => Boolean(item.folder))
+              .map((item) => item.name.toLocaleLowerCase()),
+          );
+          if (
+            [...categoryNames].every((categoryName) =>
+              folderNames.has(categoryName),
+            )
+          ) {
+            drive = candidate;
+            break;
+          }
+        } catch {
+          // Continue looking in the other document libraries.
+        }
+      }
+    }
+
+    if (!drive && isLegacyCategoryName) {
+      drive = drives.value.find(
+        (item) =>
+          item.name.toLocaleLowerCase() === libraryName.toLocaleLowerCase(),
+      );
+    }
 
     if (!drive) {
       throw new Error(`SharePoint library not found: ${libraryName}`);

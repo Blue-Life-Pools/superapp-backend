@@ -14,12 +14,14 @@ describe('SharePoint property folder routing', () => {
   function setup(
     categoryName: string,
     configuredParentFolder = configValues.SHAREPOINT_PARENT_FOLDER,
+    configOverrides: Record<string, string> = {},
   ) {
+    const values = { ...configValues, ...configOverrides };
     const config = {
       get: jest.fn((name: string) =>
         name === 'SHAREPOINT_PARENT_FOLDER'
           ? configuredParentFolder
-          : configValues[name],
+          : values[name],
       ),
     } as unknown as ConfigService;
     const request = jest.fn((path: string, init?: RequestInit) => {
@@ -28,6 +30,24 @@ describe('SharePoint property folder routing', () => {
       }
       if (path === '/sites/site-id/drives') {
         return { value: [{ id: 'drive-id', name: 'Documents' }] };
+      }
+      if (path === '/drives/drive-id/root/children?$select=id,name,folder') {
+        return {
+          value: [
+            {
+              id: 'commercial-id',
+              name: '01 Propiedades Comerciales',
+              webUrl: 'commercial-url',
+              folder: {},
+            },
+            {
+              id: 'residential-id',
+              name: '02 Propiedades Residenciales',
+              webUrl: 'residential-url',
+              folder: {},
+            },
+          ],
+        };
       }
       if (path.includes('Test%20Property%20-%20(abc1234)')) {
         throw new Error('Property folder not found');
@@ -107,6 +127,46 @@ describe('SharePoint property folder routing', () => {
     );
     expect(request).toHaveBeenCalledWith(
       `/drives/drive-id/root:/${encodeURIComponent(categoryName)}`,
+      undefined,
+    );
+  });
+
+  it('normalizes a legacy SharePoint URL and infers its document library', async () => {
+    const categoryName = '02 Propiedades Residenciales';
+    const { service, request } = setup(categoryName, 'Properties', {
+      SHAREPOINT_SITE_HOSTNAME: 'https://example.sharepoint.com',
+      SHAREPOINT_SITE_PATH:
+        '/BlueLife/Documents/Forms/AllItems.aspx?id=%2Fsites%2FBlueLife',
+      SHAREPOINT_LIBRARY_NAME: '01 Propiedades Comerciales',
+    });
+
+    await service.createPropertyFolder(
+      'abc12345-property-id',
+      'Test Property',
+      'RESIDENTIAL',
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      '/sites/example.sharepoint.com:/sites/BlueLife',
+      undefined,
+    );
+    expect(request).toHaveBeenCalledWith('/sites/site-id/drives', undefined);
+  });
+
+  it('finds the document library that contains both category folders', async () => {
+    const categoryName = '01 Propiedades Comerciales';
+    const { service, request } = setup(categoryName, 'Properties', {
+      SHAREPOINT_LIBRARY_NAME: '01 Propiedades Comerciales',
+    });
+
+    await service.createPropertyFolder(
+      'abc12345-property-id',
+      'Test Property',
+      'COMMERCIAL',
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      '/drives/drive-id/root/children?$select=id,name,folder',
       undefined,
     );
   });
