@@ -143,7 +143,9 @@ export class ReportsService {
         'Describe what was done before solving the report.',
       );
     const requiresEstimate = data.requiresEstimate ?? current.requiresEstimate;
-    const estimateNumber = data.estimateNumber?.trim() || (data.estimateNumber === '' ? null : current.estimateNumber);
+    const estimateNumber =
+      data.estimateNumber?.trim() ||
+      (data.estimateNumber === '' ? null : current.estimateNumber);
     if (status === 'SOLVED' && requiresEstimate && !estimateNumber)
       throw new BadRequestException(
         'Enter the estimate number when an estimate is required.',
@@ -303,6 +305,7 @@ export class ReportsService {
       const created = await this.sharePoint.createPropertyFolder(
         property.id,
         property.name,
+        property.propertyType,
       );
       propertyFolderId = created.id;
       propertyFolderUrl = created.webUrl;

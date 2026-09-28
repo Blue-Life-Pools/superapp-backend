@@ -14,6 +14,11 @@ type GraphChildrenResponse = {
   value: GraphFolder[];
 };
 
+const PROPERTY_CATEGORY_FOLDERS = {
+  COMMERCIAL: '01 Propiedades Comerciales',
+  RESIDENTIAL: '02 Propiedades Residenciales',
+} as const;
+
 @Injectable()
 export class SharePointService {
   private siteId: string | null = null;
@@ -50,6 +55,17 @@ export class SharePointService {
     );
   }
 
+  private propertyCategoryFolder(propertyType: string | null | undefined) {
+    const normalizedType = propertyType?.trim().toUpperCase();
+    if (normalizedType !== 'COMMERCIAL' && normalizedType !== 'RESIDENTIAL') {
+      throw new Error(
+        'The property type must be Commercial or Residential before creating its SharePoint folder.',
+      );
+    }
+
+    return PROPERTY_CATEGORY_FOLDERS[normalizedType];
+  }
+
   private async resolveDrive() {
     if (this.siteId && this.driveId) {
       return { siteId: this.siteId, driveId: this.driveId };
@@ -75,16 +91,24 @@ export class SharePointService {
     return { siteId: site.id, driveId: drive.id };
   }
 
-  async createPropertyFolder(propertyId: string, propertyName: string) {
+  async createPropertyFolder(
+    propertyId: string,
+    propertyName: string,
+    propertyType: string | null | undefined,
+  ) {
     const { driveId } = await this.resolveDrive();
     const parentPath = this.config
       .get<string>('SHAREPOINT_PARENT_FOLDER')
       ?.trim()
       .replace(/^\/+|\/+$/g, '');
+    const categoryFolderName = this.propertyCategoryFolder(propertyType);
+    const categoryPath = [parentPath, categoryFolderName]
+      .filter(Boolean)
+      .join('/');
     const safeName = this.sanitizeFolderName(propertyName, 'Property');
     const sku = propertyId.slice(0, 7).toLowerCase();
     const folderName = `${safeName} - (${sku})`;
-    const fullPath = [parentPath, folderName].filter(Boolean).join('/');
+    const fullPath = [categoryPath, folderName].filter(Boolean).join('/');
 
     try {
       return await this.graph<GraphFolder>(
@@ -94,14 +118,33 @@ export class SharePointService {
       // Continue to creation when the deterministic folder does not exist.
     }
 
-    const parent = parentPath
-      ? await this.graph<GraphFolder>(
-          `/drives/${driveId}/root:/${this.encodePath(parentPath)}`,
-        )
-      : await this.graph<GraphFolder>(`/drives/${driveId}/root`);
+    let categoryFolder: GraphFolder;
+    try {
+      categoryFolder = await this.graph<GraphFolder>(
+        `/drives/${driveId}/root:/${this.encodePath(categoryPath)}`,
+      );
+    } catch {
+      const parent = parentPath
+        ? await this.graph<GraphFolder>(
+            `/drives/${driveId}/root:/${this.encodePath(parentPath)}`,
+          )
+        : await this.graph<GraphFolder>(`/drives/${driveId}/root`);
+
+      categoryFolder = await this.graph<GraphFolder>(
+        `/drives/${driveId}/items/${parent.id}/children`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: categoryFolderName,
+            folder: {},
+            '@microsoft.graph.conflictBehavior': 'fail',
+          }),
+        },
+      );
+    }
 
     return this.graph<GraphFolder>(
-      `/drives/${driveId}/items/${parent.id}/children`,
+      `/drives/${driveId}/items/${categoryFolder.id}/children`,
       {
         method: 'POST',
         body: JSON.stringify({

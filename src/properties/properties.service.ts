@@ -243,6 +243,7 @@ export class PropertiesService {
           const createdFolder = await this.sharePoint.createPropertyFolder(
             property.id,
             property.name,
+            property.propertyType,
           );
           propertyFolderId = createdFolder.id;
           propertyFolderUrl = createdFolder.webUrl;
