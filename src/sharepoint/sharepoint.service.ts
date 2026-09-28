@@ -66,6 +66,35 @@ export class SharePointService {
     return PROPERTY_CATEGORY_FOLDERS[normalizedType];
   }
 
+  private propertyCategoryPaths(
+    configuredParentPath: string | undefined,
+    categoryFolderName: string,
+  ) {
+    const parentSegments = (configuredParentPath ?? '')
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    const categoryNames = new Set(
+      Object.values(PROPERTY_CATEGORY_FOLDERS).map((name) =>
+        name.toLocaleLowerCase(),
+      ),
+    );
+
+    if (
+      parentSegments.length > 0 &&
+      categoryNames.has(
+        parentSegments[parentSegments.length - 1].toLocaleLowerCase(),
+      )
+    ) {
+      parentSegments.pop();
+    }
+
+    return {
+      categoryParentPath: parentSegments.join('/'),
+      categoryPath: [...parentSegments, categoryFolderName].join('/'),
+    };
+  }
+
   private async resolveDrive() {
     if (this.siteId && this.driveId) {
       return { siteId: this.siteId, driveId: this.driveId };
@@ -102,9 +131,10 @@ export class SharePointService {
       ?.trim()
       .replace(/^\/+|\/+$/g, '');
     const categoryFolderName = this.propertyCategoryFolder(propertyType);
-    const categoryPath = [parentPath, categoryFolderName]
-      .filter(Boolean)
-      .join('/');
+    const { categoryParentPath, categoryPath } = this.propertyCategoryPaths(
+      parentPath,
+      categoryFolderName,
+    );
     const safeName = this.sanitizeFolderName(propertyName, 'Property');
     const sku = propertyId.slice(0, 7).toLowerCase();
     const folderName = `${safeName} - (${sku})`;
@@ -124,9 +154,9 @@ export class SharePointService {
         `/drives/${driveId}/root:/${this.encodePath(categoryPath)}`,
       );
     } catch {
-      const parent = parentPath
+      const parent = categoryParentPath
         ? await this.graph<GraphFolder>(
-            `/drives/${driveId}/root:/${this.encodePath(parentPath)}`,
+            `/drives/${driveId}/root:/${this.encodePath(categoryParentPath)}`,
           )
         : await this.graph<GraphFolder>(`/drives/${driveId}/root`);
 

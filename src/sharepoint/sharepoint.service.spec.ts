@@ -11,9 +11,16 @@ describe('SharePoint property folder routing', () => {
     SHAREPOINT_PARENT_FOLDER: 'Properties',
   };
 
-  function setup(categoryName: string) {
+  function setup(
+    categoryName: string,
+    configuredParentFolder = configValues.SHAREPOINT_PARENT_FOLDER,
+  ) {
     const config = {
-      get: jest.fn((name: string) => configValues[name]),
+      get: jest.fn((name: string) =>
+        name === 'SHAREPOINT_PARENT_FOLDER'
+          ? configuredParentFolder
+          : configValues[name],
+      ),
     } as unknown as ConfigService;
     const request = jest.fn((path: string, init?: RequestInit) => {
       if (path === '/sites/example.sharepoint.com:/sites/BlueLife') {
@@ -25,9 +32,7 @@ describe('SharePoint property folder routing', () => {
       if (path.includes('Test%20Property%20-%20(abc1234)')) {
         throw new Error('Property folder not found');
       }
-      if (
-        path.endsWith(`/root:/Properties/${encodeURIComponent(categoryName)}`)
-      ) {
+      if (path.endsWith(`/${encodeURIComponent(categoryName)}`)) {
         return {
           id: 'category-id',
           name: categoryName,
@@ -81,5 +86,28 @@ describe('SharePoint property folder routing', () => {
         null,
       ),
     ).rejects.toThrow('property type must be Commercial or Residential');
+  });
+
+  it('replaces a legacy Commercial parent with the Residential sibling', async () => {
+    const categoryName = '02 Propiedades Residenciales';
+    const { service, request } = setup(
+      categoryName,
+      '01 Propiedades Comerciales',
+    );
+
+    await service.createPropertyFolder(
+      'abc12345-property-id',
+      'Test Property',
+      'RESIDENTIAL',
+    );
+
+    expect(request).toHaveBeenCalledWith(
+      `/drives/drive-id/root:/${encodeURIComponent(categoryName)}/Test%20Property%20-%20(abc1234)`,
+      undefined,
+    );
+    expect(request).toHaveBeenCalledWith(
+      `/drives/drive-id/root:/${encodeURIComponent(categoryName)}`,
+      undefined,
+    );
   });
 });
