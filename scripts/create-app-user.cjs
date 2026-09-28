@@ -9,7 +9,7 @@ const role = (roleInput || '').trim().toUpperCase();
 const email = (emailInput || '').trim().toLowerCase();
 const name = (nameInput || '').trim();
 const password = passwordInput || '';
-const allowedRoles = ['COMMERCIAL', 'CHEMICALS', 'REPORTS'];
+const allowedRoles = ['COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'SUPER_ADMIN'];
 
 if (!allowedRoles.includes(role) || !/^\S+@\S+\.\S+$/.test(email) || !name || password.length < 12) {
   console.error('Usage: npm run users:create -- ROLE email "Name" "password (12+ characters)"');

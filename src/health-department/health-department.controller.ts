@@ -22,7 +22,7 @@ export class HealthLoginDto {
 
 @Controller('health-department')
 @ApiTags('Health Department')
-@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
 export class HealthDepartmentController {
   constructor(private readonly health: HealthDepartmentService) {}
 
@@ -38,19 +38,19 @@ export class HealthDepartmentController {
   }
 
   @Post('sync')
-  @Roles('COMMERCIAL')
+  @Roles('HEALTH')
   syncOutlook() {
     return this.health.syncOutlook();
   }
 
   @Post('tickets')
-  @Roles('COMMERCIAL')
+  @Roles('HEALTH')
   createTicket(@Body() data: UpdateHealthTicketDto) {
     return this.health.createTicket(data);
   }
 
   @Patch('tickets/:id')
-  @Roles('COMMERCIAL')
+  @Roles('HEALTH')
   updateTicket(@Param('id') id: string, @Body() data: UpdateHealthTicketDto) {
     return this.health.updateTicket(id, data);
   }
@@ -71,7 +71,7 @@ export class HealthDepartmentController {
   }
 
   @Post('tickets/:id/comments')
-  @Roles('COMMERCIAL')
+  @Roles('HEALTH')
   createComment(
     @Param('id') id: string,
     @Body() data: CreateHealthTicketCommentDto,
@@ -80,7 +80,7 @@ export class HealthDepartmentController {
   }
 
   @Get('status')
-  @Roles('COMMERCIAL')
+  @Roles('HEALTH')
   integrationStatus() {
     return this.health.integrationStatus();
   }

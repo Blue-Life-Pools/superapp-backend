@@ -25,7 +25,7 @@ import { Roles } from '../auth/auth.decorators';
 
 @Controller('properties')
 @ApiTags('Properties')
-@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
 export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) {}
 

@@ -6,6 +6,7 @@ describe('Health protected deletion and ticket persistence', () => {
   let service: HealthDepartmentService;
   beforeEach(() => {
     prisma = {
+      appSession: { findUnique: jest.fn().mockResolvedValue(null) },
       chemicalOwnerSession: { findUnique: jest.fn().mockResolvedValue(null) },
       healthAdmin: { findUnique: jest.fn().mockResolvedValue(null) },
       healthTicket: { update: jest.fn().mockResolvedValue({ ticketNumber: 'HD-TEST' }), create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)), findMany: jest.fn().mockResolvedValue([]) },
@@ -26,6 +27,15 @@ describe('Health protected deletion and ticket persistence', () => {
     await service.deleteTicket('HD-TEST', 'Bearer test');
     expect(prisma.chemicalOwnerSession.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { tokenHash: createHash('sha256').update('test').digest('hex') } }));
     expect(prisma.healthTicket.update).toHaveBeenCalledWith(expect.objectContaining({ data: { deletedAt: expect.any(Date) } }));
+  });
+  it.each(['HEALTH', 'SUPER_ADMIN'])('allows an active %s application session', async (role) => {
+    prisma.appSession.findUnique.mockResolvedValue({
+      expiresAt: new Date(Date.now() + 60000),
+      user: { active: true, role },
+    });
+    await service.deleteTicket('HD-TEST', 'Bearer app-token');
+    expect(prisma.healthTicket.update).toHaveBeenCalled();
+    expect(prisma.chemicalOwnerSession.findUnique).not.toHaveBeenCalled();
   });
   it('clears an assigned date and persists estimate selections', async () => {
     await service.updateTicket('HD-TEST', { visitDate: null as any, estimateStatus: 'REQUIRED', estimateNumber: '123' });

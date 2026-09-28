@@ -29,7 +29,7 @@ import { Roles } from '../auth/auth.decorators';
 
 @Controller('reports')
 @ApiTags('Reports')
-@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 

@@ -286,7 +286,7 @@ export class ChemicalsService {
       appSession &&
       appSession.expiresAt > new Date() &&
       appSession.user.active &&
-      appSession.user.role === 'CHEMICALS'
+      ['CHEMICALS', 'SUPER_ADMIN'].includes(appSession.user.role)
     ) {
       return {
         name: appSession.user.name,
