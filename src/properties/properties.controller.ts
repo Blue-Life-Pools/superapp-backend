@@ -37,6 +37,11 @@ export class PropertiesController {
     return this.propertiesService.findDeleted();
   }
 
+  @Post('sharepoint-folders/match-existing')
+  matchExistingSharePointFolders() {
+    return this.propertiesService.matchExistingSharePointFolders();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);

@@ -15,6 +15,12 @@ describe('SharePoint property folder routing', () => {
     categoryName: string,
     configuredParentFolder = configValues.SHAREPOINT_PARENT_FOLDER,
     configOverrides: Record<string, string> = {},
+    childFolders: Array<{
+      id: string;
+      name: string;
+      webUrl: string;
+      folder: object;
+    }> = [],
   ) {
     const values = { ...configValues, ...configOverrides };
     const config = {
@@ -58,6 +64,12 @@ describe('SharePoint property folder routing', () => {
           name: categoryName,
           webUrl: 'category-url',
         };
+      }
+      if (
+        path ===
+        '/drives/drive-id/items/category-id/children?$select=id,name,webUrl,folder&$top=999'
+      ) {
+        return { value: childFolders };
       }
       if (path === '/drives/drive-id/items/category-id/children') {
         expect(init?.method).toBe('POST');
@@ -189,5 +201,62 @@ describe('SharePoint property folder routing', () => {
       '/sites/bluelifepools.sharepoint.com:/sites/finanzas',
       undefined,
     );
+  });
+
+  it('matches an existing folder using the normalized property name', async () => {
+    const categoryName = '01 Propiedades Comerciales';
+    const { service } = setup(categoryName, 'Properties', {}, [
+      {
+        id: 'central-apartments-folder',
+        name: '1701 Central-Apartments',
+        webUrl: 'https://sharepoint/1701-central-apartments',
+        folder: {},
+      },
+    ]);
+
+    const result = await service.matchExistingPropertyFolders([
+      {
+        id: 'central-apartments-property',
+        name: '1701 CENTRAL APARTMENTS',
+        propertyType: 'COMMERCIAL',
+      },
+      {
+        id: 'different-property',
+        name: '1701 CENTRAL APARTMENTS NORTH',
+        propertyType: 'COMMERCIAL',
+      },
+    ]);
+
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0].propertyId).toBe('central-apartments-property');
+    expect(result.matches[0].folder.id).toBe('central-apartments-folder');
+  });
+
+  it('does not match duplicate property names to the same folder', async () => {
+    const categoryName = '01 Propiedades Comerciales';
+    const { service } = setup(categoryName, 'Properties', {}, [
+      {
+        id: 'central-apartments-folder',
+        name: '1701 CENTRAL APARTMENTS',
+        webUrl: 'https://sharepoint/1701-central-apartments',
+        folder: {},
+      },
+    ]);
+
+    const result = await service.matchExistingPropertyFolders([
+      {
+        id: 'duplicate-1',
+        name: '1701 CENTRAL APARTMENTS',
+        propertyType: 'COMMERCIAL',
+      },
+      {
+        id: 'duplicate-2',
+        name: '1701 central apartments',
+        propertyType: 'COMMERCIAL',
+      },
+    ]);
+
+    expect(result.matches).toHaveLength(0);
+    expect(result.ambiguous).toHaveLength(2);
   });
 });

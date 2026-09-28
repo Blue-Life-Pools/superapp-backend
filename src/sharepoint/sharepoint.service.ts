@@ -12,6 +12,7 @@ type GraphFolder = {
 
 type GraphChildrenResponse = {
   value: GraphFolder[];
+  '@odata.nextLink'?: string;
 };
 
 type GraphDrive = {
@@ -56,6 +57,38 @@ export class SharePointService {
         .trim()
         .replace(/[. ]+$/g, '') || fallback
     );
+  }
+
+  private normalizedPropertyName(value: string) {
+    return value
+      .replace(/\s*-\s*\([a-f0-9]{7}\)\s*$/i, '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
+  private nextGraphPath(nextLink: string) {
+    const url = new URL(nextLink);
+    return `${url.pathname.replace(/^\/v1\.0/, '')}${url.search}`;
+  }
+
+  private async listChildFolders(driveId: string, folderId: string) {
+    const folders: GraphFolder[] = [];
+    let path: string | null =
+      `/drives/${driveId}/items/${folderId}/children?$select=id,name,webUrl,folder&$top=999`;
+
+    while (path) {
+      const page: GraphChildrenResponse = await this.graph(path);
+      folders.push(...page.value.filter((item) => Boolean(item.folder)));
+      path = page['@odata.nextLink']
+        ? this.nextGraphPath(page['@odata.nextLink'])
+        : null;
+    }
+
+    return folders;
   }
 
   private sharePointLocation() {
@@ -233,6 +266,91 @@ export class SharePointService {
     return { siteId: site.id, driveId: drive.id };
   }
 
+  private async propertyCategory(propertyType: string | null | undefined) {
+    const { driveId } = await this.resolveDrive();
+    const parentPath = this.config
+      .get<string>('SHAREPOINT_PARENT_FOLDER')
+      ?.trim()
+      .replace(/^\/+|\/+$/g, '');
+    const categoryFolderName = this.propertyCategoryFolder(propertyType);
+    const paths = this.propertyCategoryPaths(parentPath, categoryFolderName);
+    const folder = await this.graph<GraphFolder>(
+      `/drives/${driveId}/root:/${this.encodePath(paths.categoryPath)}`,
+    );
+
+    return { driveId, folder, ...paths };
+  }
+
+  async matchExistingPropertyFolders(
+    properties: Array<{
+      id: string;
+      name: string;
+      propertyType: string | null;
+    }>,
+  ) {
+    const foldersByType = new Map<string, GraphFolder[]>();
+    const folderCounts: Record<string, number> = {};
+
+    for (const propertyType of ['COMMERCIAL', 'RESIDENTIAL']) {
+      try {
+        const { driveId, folder } = await this.propertyCategory(propertyType);
+        const folders = await this.listChildFolders(driveId, folder.id);
+        foldersByType.set(propertyType, folders);
+        folderCounts[propertyType] = folders.length;
+      } catch {
+        foldersByType.set(propertyType, []);
+        folderCounts[propertyType] = 0;
+      }
+    }
+
+    const matches: Array<{ propertyId: string; folder: GraphFolder }> = [];
+    const ambiguous: Array<{
+      propertyId: string;
+      propertyName: string;
+      folderNames: string[];
+      reason: 'DUPLICATE_PROPERTY_NAME' | 'DUPLICATE_FOLDER_NAME';
+    }> = [];
+
+    const propertiesByKey = new Map<string, typeof properties>();
+    for (const property of properties) {
+      const type = property.propertyType?.trim().toUpperCase();
+      if (type !== 'COMMERCIAL' && type !== 'RESIDENTIAL') continue;
+      const key = `${type}:${this.normalizedPropertyName(property.name)}`;
+      propertiesByKey.set(key, [...(propertiesByKey.get(key) ?? []), property]);
+    }
+
+    for (const property of properties) {
+      const type = property.propertyType?.trim().toUpperCase();
+      if (type !== 'COMMERCIAL' && type !== 'RESIDENTIAL') continue;
+      const propertyKey = this.normalizedPropertyName(property.name);
+      if ((propertiesByKey.get(`${type}:${propertyKey}`) ?? []).length > 1) {
+        ambiguous.push({
+          propertyId: property.id,
+          propertyName: property.name,
+          folderNames: [],
+          reason: 'DUPLICATE_PROPERTY_NAME',
+        });
+        continue;
+      }
+      const candidates = (foldersByType.get(type) ?? []).filter(
+        (folder) => this.normalizedPropertyName(folder.name) === propertyKey,
+      );
+
+      if (candidates.length === 1) {
+        matches.push({ propertyId: property.id, folder: candidates[0] });
+      } else if (candidates.length > 1) {
+        ambiguous.push({
+          propertyId: property.id,
+          propertyName: property.name,
+          folderNames: candidates.map((folder) => folder.name),
+          reason: 'DUPLICATE_FOLDER_NAME',
+        });
+      }
+    }
+
+    return { matches, ambiguous, folderCounts };
+  }
+
   async createPropertyFolder(
     propertyId: string,
     propertyName: string,
@@ -285,6 +403,16 @@ export class SharePointService {
         },
       );
     }
+
+    const existingFolders = await this.listChildFolders(
+      driveId,
+      categoryFolder.id,
+    );
+    const requestedName = this.normalizedPropertyName(propertyName);
+    const existingMatches = existingFolders.filter(
+      (folder) => this.normalizedPropertyName(folder.name) === requestedName,
+    );
+    if (existingMatches.length === 1) return existingMatches[0];
 
     return this.graph<GraphFolder>(
       `/drives/${driveId}/items/${categoryFolder.id}/children`,

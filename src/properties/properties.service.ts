@@ -309,6 +309,70 @@ export class PropertiesService {
     }
   }
 
+  async matchExistingSharePointFolders() {
+    const properties = await this.prisma.property.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ sharepointFolderId: null }, { sharepointFolderUrl: null }],
+      },
+      select: {
+        id: true,
+        name: true,
+        propertyType: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    const result =
+      await this.sharePoint.matchExistingPropertyFolders(properties);
+    const propertyById = new Map(
+      properties.map((property) => [property.id, property]),
+    );
+
+    if (result.matches.length > 0) {
+      await this.prisma.$transaction(
+        result.matches.map(({ propertyId, folder }) =>
+          this.prisma.property.update({
+            where: { id: propertyId },
+            data: {
+              sharepointFolderId: folder.id,
+              sharepointFolderUrl: folder.webUrl,
+            },
+          }),
+        ),
+      );
+    }
+
+    const matchedIds = new Set(
+      result.matches.map(({ propertyId }) => propertyId),
+    );
+    const ambiguousIds = new Set(
+      result.ambiguous.map(({ propertyId }) => propertyId),
+    );
+
+    return {
+      scanned: properties.length,
+      matched: result.matches.map(({ propertyId, folder }) => ({
+        propertyId,
+        propertyName: propertyById.get(propertyId)?.name ?? propertyId,
+        propertyType: propertyById.get(propertyId)?.propertyType ?? null,
+        folderName: folder.name,
+        folderUrl: folder.webUrl,
+      })),
+      ambiguous: result.ambiguous,
+      unmatched: properties
+        .filter(
+          (property) =>
+            !matchedIds.has(property.id) && !ambiguousIds.has(property.id),
+        )
+        .map((property) => ({
+          propertyId: property.id,
+          propertyName: property.name,
+          propertyType: property.propertyType,
+        })),
+      folderCounts: result.folderCounts,
+    };
+  }
+
   async uploadWaterBodyPhoto(
     propertyId: string,
     waterBodyId: string,
