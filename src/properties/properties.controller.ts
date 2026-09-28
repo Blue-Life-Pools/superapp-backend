@@ -21,9 +21,11 @@ import { CreateProposalFollowUpDto } from './dto/create-proposal-follow-up.dto';
 import { UpdateSalesActivityStatusDto } from './dto/update-sales-activity-status.dto';
 import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
+import { Roles } from '../auth/auth.decorators';
 
 @Controller('properties')
 @ApiTags('Properties')
+@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
 export class PropertiesController {
   constructor(private readonly propertiesService: PropertiesService) {}
 
@@ -33,11 +35,13 @@ export class PropertiesController {
   }
 
   @Get('deleted')
+  @Roles('COMMERCIAL')
   findDeleted() {
     return this.propertiesService.findDeleted();
   }
 
   @Post('sharepoint-folders/match-existing')
+  @Roles('COMMERCIAL')
   matchExistingSharePointFolders() {
     return this.propertiesService.matchExistingSharePointFolders();
   }
@@ -48,21 +52,25 @@ export class PropertiesController {
   }
 
   @Post()
+  @Roles('COMMERCIAL')
   create(@Body() data: CreatePropertyDto) {
     return this.propertiesService.create(data);
   }
 
   @Patch(':id')
+  @Roles('COMMERCIAL')
   update(@Param('id') id: string, @Body() data: UpdatePropertyDto) {
     return this.propertiesService.update(id, data);
   }
 
   @Post(':id/sharepoint-folder')
+  @Roles('COMMERCIAL')
   provisionSharePointFolder(@Param('id') id: string) {
     return this.propertiesService.provisionSharePointFolder(id);
   }
 
   @Post(':propertyId/water-bodies/:waterBodyId/photos')
+  @Roles('COMMERCIAL')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -103,6 +111,7 @@ export class PropertiesController {
   }
 
   @Post(':id/sales-activities')
+  @Roles('COMMERCIAL')
   createSalesActivity(
     @Param('id') id: string,
     @Body() data: CreateSalesActivityDto,
@@ -111,6 +120,7 @@ export class PropertiesController {
   }
 
   @Post(':propertyId/sales-activities/:activityId/email-draft')
+  @Roles('COMMERCIAL')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -158,6 +168,7 @@ export class PropertiesController {
   }
 
   @Post(':propertyId/sales-activities/:activityId/pdf')
+  @Roles('COMMERCIAL')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -198,6 +209,7 @@ export class PropertiesController {
   }
 
   @Patch(':propertyId/sales-activities/:activityId/status')
+  @Roles('COMMERCIAL')
   updateSalesActivityStatus(
     @Param('propertyId') propertyId: string,
     @Param('activityId') activityId: string,
@@ -211,6 +223,7 @@ export class PropertiesController {
   }
 
   @Post(':propertyId/sales-activities/:activityId/follow-ups')
+  @Roles('COMMERCIAL')
   createProposalFollowUp(
     @Param('propertyId') propertyId: string,
     @Param('activityId') activityId: string,
@@ -224,6 +237,7 @@ export class PropertiesController {
   }
 
   @Patch(':propertyId/sales-activities/:activityId')
+  @Roles('COMMERCIAL')
   updateSalesActivity(
     @Param('propertyId') propertyId: string,
     @Param('activityId') activityId: string,
@@ -237,6 +251,7 @@ export class PropertiesController {
   }
 
   @Delete(':propertyId/sales-activities/:activityId')
+  @Roles('COMMERCIAL')
   deleteSalesActivity(
     @Param('propertyId') propertyId: string,
     @Param('activityId') activityId: string,
@@ -245,16 +260,19 @@ export class PropertiesController {
   }
 
   @Delete(':id')
+  @Roles('COMMERCIAL')
   remove(@Param('id') id: string) {
     return this.propertiesService.remove(id);
   }
 
   @Patch(':id/restore')
+  @Roles('COMMERCIAL')
   restore(@Param('id') id: string) {
     return this.propertiesService.restore(id);
   }
 
   @Delete(':id/permanent')
+  @Roles('COMMERCIAL')
   removePermanently(@Param('id') id: string) {
     return this.propertiesService.removePermanently(id);
   }

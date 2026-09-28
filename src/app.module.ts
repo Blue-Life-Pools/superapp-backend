@@ -9,6 +9,7 @@ import { PropertiesModule } from './properties/properties.module';
 import { ChemicalsModule } from './chemicals/chemicals.module';
 import { HealthDepartmentModule } from './health-department/health-department.module';
 import { ReportsModule } from './reports/reports.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ReportsModule } from './reports/reports.module';
     ChemicalsModule,
     HealthDepartmentModule,
     ReportsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

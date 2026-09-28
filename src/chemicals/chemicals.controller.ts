@@ -21,9 +21,11 @@ import { CreateChemicalReportDto } from './dto/create-chemical-report.dto';
 import { UpdateChemicalReportDto } from './dto/update-chemical-report.dto';
 import { CreateChemicalTechnicianDto } from './dto/create-chemical-technician.dto';
 import { UpdateChemicalTechnicianDto } from './dto/update-chemical-technician.dto';
+import { Public, Roles } from '../auth/auth.decorators';
 
 @Controller('chemicals')
 @ApiTags('Chemicals')
+@Roles('CHEMICALS')
 export class ChemicalsController {
   constructor(private readonly chemicalsService: ChemicalsService) {}
 
@@ -67,11 +69,13 @@ export class ChemicalsController {
   }
 
   @Post('technicians/access')
+  @Public()
   accessTechnician(@Body() data: AccessChemicalTechnicianDto) {
     return this.chemicalsService.accessTechnician(data.code);
   }
 
   @Get('technicians/:id/whatsapp')
+  @Public()
   async openTechnicianWhatsApp(
     @Param('id') id: string,
     @Query('formUrl') formUrl: string,
@@ -83,6 +87,7 @@ export class ChemicalsController {
   }
 
   @Get('technicians/resolve/:token')
+  @Public()
   resolveTechnician(@Param('token') token: string) {
     return this.chemicalsService.resolveTechnician(token);
   }
@@ -93,6 +98,7 @@ export class ChemicalsController {
   }
 
   @Post('owner/access')
+  @Public()
   accessOwner(@Body() data: AccessChemicalOwnerDto) {
     return this.chemicalsService.accessOwner(data.email, data.password);
   }
@@ -121,6 +127,7 @@ export class ChemicalsController {
   }
 
   @Post('reports')
+  @Public()
   create(@Body() data: CreateChemicalReportDto) {
     return this.chemicalsService.create(data);
   }

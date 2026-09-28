@@ -32,6 +32,7 @@ describe('ChemicalsService', () => {
   const findReport = jest.fn();
   const findTechnician = jest.fn();
   const findTechnicians = jest.fn();
+  const findAppSession = jest.fn();
   const findOwnerSession = jest.fn();
   const prisma = {
     chemicalReport: { create, findMany, findFirst: findReport, update },
@@ -39,6 +40,7 @@ describe('ChemicalsService', () => {
       findFirst: findTechnician,
       findMany: findTechnicians,
     },
+    appSession: { findUnique: findAppSession },
     chemicalOwnerSession: { findUnique: findOwnerSession },
     property: { findFirst },
   } as unknown as PrismaService;
@@ -48,6 +50,7 @@ describe('ChemicalsService', () => {
     jest.clearAllMocks();
     findReport.mockReset();
     findMany.mockResolvedValue([]);
+    findAppSession.mockResolvedValue(null);
     create.mockResolvedValue({});
   });
 

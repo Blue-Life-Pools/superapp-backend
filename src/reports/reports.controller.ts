@@ -25,9 +25,11 @@ import {
 } from './dto/report-incident.dto';
 import { ReportOptionDto } from './dto/report-option.dto';
 import { CreateReportUploadSessionDto } from './dto/report-attachment.dto';
+import { Roles } from '../auth/auth.decorators';
 
 @Controller('reports')
 @ApiTags('Reports')
+@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
@@ -35,11 +37,13 @@ export class ReportsController {
     return this.reports.dashboard();
   }
   @Post('incidents')
+  @Roles('REPORTS')
   @ApiOperation({ summary: 'Create a pending report incident' })
   createIncident(@Body() data: CreateReportIncidentDto) {
     return this.reports.createIncident(data);
   }
   @Post('incidents/:id/attachments/sessions')
+  @Roles('REPORTS')
   @ApiOperation({ summary: 'Start a SharePoint upload for report media' })
   createUploadSession(
     @Param('id') id: string,
@@ -49,6 +53,7 @@ export class ReportsController {
   }
 
   @Post('incidents/:id/attachments/sessions/:sessionId/chunks')
+  @Roles('REPORTS')
   @ApiOperation({
     summary: 'Upload the next image or video chunk to SharePoint',
   })
@@ -69,16 +74,21 @@ export class ReportsController {
     if (!file) throw new BadRequestException('A file chunk is required.');
     return this.reports.uploadChunk(id, sessionId, file.buffer);
   }
-  @Patch('incidents/:id') updateIncident(
+  @Patch('incidents/:id')
+  @Roles('REPORTS')
+  updateIncident(
     @Param('id') id: string,
     @Body() data: UpdateReportIncidentDto,
   ) {
     return this.reports.updateIncident(id, data);
   }
-  @Delete('incidents/:id') deleteIncident(@Param('id') id: string) {
+  @Delete('incidents/:id')
+  @Roles('REPORTS')
+  deleteIncident(@Param('id') id: string) {
     return this.reports.deleteIncident(id);
   }
   @Post('config/:kind')
+  @Roles('REPORTS')
   @ApiParam({
     name: 'kind',
     enum: ['type', 'supervisor', 'inspector', 'technician'],
@@ -87,6 +97,7 @@ export class ReportsController {
     return this.reports.createOption(kind, data);
   }
   @Patch('config/:kind/:id')
+  @Roles('REPORTS')
   @ApiParam({
     name: 'kind',
     enum: ['type', 'supervisor', 'inspector', 'technician'],
@@ -99,6 +110,7 @@ export class ReportsController {
     return this.reports.updateOption(kind, id, data);
   }
   @Delete('config/:kind/:id')
+  @Roles('REPORTS')
   @ApiParam({
     name: 'kind',
     enum: ['type', 'supervisor', 'inspector', 'technician'],

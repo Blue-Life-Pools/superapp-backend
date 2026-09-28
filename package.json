@@ -14,6 +14,7 @@
     "start:prod": "prisma migrate deploy && node dist/main",
     "docs": "npm run docs:generate && node scripts/serve-api-docs.cjs",
     "docs:generate": "nest build && node scripts/generate-api-docs.cjs",
+    "users:create": "node scripts/create-app-user.cjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

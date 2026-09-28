@@ -277,8 +277,26 @@ export class ChemicalsService {
 
   async ownerSession(authorization?: string) {
     const token = bearerToken(authorization);
+    const hash = tokenHash(token);
+    const appSession = await this.prisma.appSession.findUnique({
+      where: { tokenHash: hash },
+      include: { user: true },
+    });
+    if (
+      appSession &&
+      appSession.expiresAt > new Date() &&
+      appSession.user.active &&
+      appSession.user.role === 'CHEMICALS'
+    ) {
+      return {
+        name: appSession.user.name,
+        email: appSession.user.email,
+        expiresAt: appSession.expiresAt,
+      };
+    }
+
     const session = await this.prisma.chemicalOwnerSession.findUnique({
-      where: { tokenHash: tokenHash(token) },
+      where: { tokenHash: hash },
       include: { owner: true },
     });
     if (!session || session.expiresAt <= new Date() || !session.owner.active) {

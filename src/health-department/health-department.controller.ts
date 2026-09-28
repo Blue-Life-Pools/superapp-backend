@@ -13,6 +13,7 @@ import { UpdateHealthTicketDto } from './dto/update-health-ticket.dto';
 import { CreateHealthTicketCommentDto } from './dto/create-health-ticket-comment.dto';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Public, Roles } from '../auth/auth.decorators';
 
 export class HealthLoginDto {
   @IsEmail() email!: string;
@@ -21,10 +22,12 @@ export class HealthLoginDto {
 
 @Controller('health-department')
 @ApiTags('Health Department')
+@Roles('COMMERCIAL', 'CHEMICALS', 'REPORTS')
 export class HealthDepartmentController {
   constructor(private readonly health: HealthDepartmentService) {}
 
   @Post('login')
+  @Public()
   login(@Body() data: HealthLoginDto) {
     return this.health.login(data.email, data.password);
   }
@@ -35,21 +38,25 @@ export class HealthDepartmentController {
   }
 
   @Post('sync')
+  @Roles('COMMERCIAL')
   syncOutlook() {
     return this.health.syncOutlook();
   }
 
   @Post('tickets')
+  @Roles('COMMERCIAL')
   createTicket(@Body() data: UpdateHealthTicketDto) {
     return this.health.createTicket(data);
   }
 
   @Patch('tickets/:id')
+  @Roles('COMMERCIAL')
   updateTicket(@Param('id') id: string, @Body() data: UpdateHealthTicketDto) {
     return this.health.updateTicket(id, data);
   }
 
   @Delete('tickets/:id')
+  @Public()
   @ApiBearerAuth('bearer')
   deleteTicket(
     @Param('id') id: string,
@@ -64,6 +71,7 @@ export class HealthDepartmentController {
   }
 
   @Post('tickets/:id/comments')
+  @Roles('COMMERCIAL')
   createComment(
     @Param('id') id: string,
     @Body() data: CreateHealthTicketCommentDto,
@@ -72,6 +80,7 @@ export class HealthDepartmentController {
   }
 
   @Get('status')
+  @Roles('COMMERCIAL')
   integrationStatus() {
     return this.health.integrationStatus();
   }

@@ -18,6 +18,7 @@ export function createSwaggerDocument(app: INestApplication) {
       'bearer',
     )
     .addTag('System', 'Estado general del backend')
+    .addTag('Authentication', 'Inicio de sesión y sesión activa por rol')
     .addTag(
       'Properties',
       'Propiedades, contactos, piscinas y actividad comercial',
