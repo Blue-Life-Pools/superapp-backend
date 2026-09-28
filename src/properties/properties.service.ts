@@ -38,6 +38,16 @@ export class PropertiesService {
     private readonly emailDrafts: EmailDraftsService,
   ) {}
 
+  private normalizePropertyIdentity(value: string | null | undefined) {
+    return (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+
   private sharePointProvisioningError(error: unknown) {
     const detail = error instanceof Error ? error.message : '';
 
@@ -147,10 +157,49 @@ export class PropertiesService {
   async create(data: CreatePropertyDto) {
     const { contacts, waterBodies, managementCompanyName, ...propertyData } =
       data;
+    propertyData.name = propertyData.name.trim();
     const normalizedManagementCompanyName = managementCompanyName?.trim();
     const normalizedEmails = contacts.map((contact) =>
       contact.email.trim().toLowerCase(),
     );
+
+    const existingProperties = await this.prisma.property.findMany({
+      select: {
+        name: true,
+        addressLine1: true,
+        city: true,
+        state: true,
+        zipCode: true,
+        deletedAt: true,
+      },
+    });
+    const requestedName = this.normalizePropertyIdentity(propertyData.name);
+    const requestedAddress = this.normalizePropertyIdentity(
+      propertyData.addressLine1,
+    );
+    const requestedCity = this.normalizePropertyIdentity(propertyData.city);
+    const requestedState = this.normalizePropertyIdentity(propertyData.state);
+    const requestedZip = this.normalizePropertyIdentity(propertyData.zipCode);
+    const duplicate = existingProperties.find((property) => {
+      const sameName =
+        this.normalizePropertyIdentity(property.name) === requestedName;
+      const sameAddress =
+        Boolean(requestedAddress && requestedZip) &&
+        this.normalizePropertyIdentity(property.addressLine1) ===
+          requestedAddress &&
+        this.normalizePropertyIdentity(property.city) === requestedCity &&
+        this.normalizePropertyIdentity(property.state) === requestedState &&
+        this.normalizePropertyIdentity(property.zipCode) === requestedZip;
+      return sameName || sameAddress;
+    });
+
+    if (duplicate) {
+      throw new BadRequestException(
+        duplicate.deletedAt
+          ? `A deleted property named "${duplicate.name}" already exists. Restore that record instead of creating a duplicate.`
+          : `A property named "${duplicate.name}" already exists. Open the existing record instead of creating a duplicate.`,
+      );
+    }
 
     if (!contacts.some((contact) => contact.role === 'PROPERTY_MANAGER')) {
       throw new BadRequestException(
