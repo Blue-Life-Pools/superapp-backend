@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { HealthDepartmentService } from './health-department.service';
 import { UpdateHealthTicketDto } from './dto/update-health-ticket.dto';
@@ -33,8 +34,8 @@ export class HealthDepartmentController {
   }
 
   @Get('tickets')
-  listTickets() {
-    return this.health.listTickets();
+  listTickets(@Query('offset') offset?: string, @Query('limit') limit?: string) {
+    return this.health.listTickets(Number(offset) || 0, Math.min(50, Math.max(1, Number(limit) || 25)));
   }
 
   @Post('sync')

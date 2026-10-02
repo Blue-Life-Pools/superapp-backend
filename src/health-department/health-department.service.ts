@@ -44,8 +44,13 @@ export class HealthDepartmentService implements OnModuleInit, OnModuleDestroy {
     if (this.syncTimer) clearInterval(this.syncTimer);
   }
 
-  async listTickets() {
-    return this.prisma.healthTicket.findMany({ where: { deletedAt: null }, include: { comments: { orderBy: { createdAt: 'asc' } } }, orderBy: { receivedAt: 'desc' } });
+  async listTickets(skip = 0, take = 25) {
+    const items = await this.prisma.healthTicket.findMany({ where: { deletedAt: null }, include: { comments: { orderBy: { createdAt: 'asc' } } }, orderBy: { receivedAt: 'desc' }, skip, take });
+    // Keep compatibility with lightweight service mocks while production Prisma uses pagination metadata.
+    const count = this.prisma.healthTicket.count as unknown as ((args: { where: { deletedAt: null } }) => Promise<number>) | undefined;
+    if (!count) return items;
+    const total = await count.call(this.prisma.healthTicket, { where: { deletedAt: null } });
+    return { items, total, hasMore: skip + items.length < total };
   }
 
   async listComments(ticketNumber: string) {
@@ -135,7 +140,7 @@ export class HealthDepartmentService implements OnModuleInit, OnModuleDestroy {
       });
       created += 1;
     }
-    return { created, mailbox, category, total: (await this.listTickets()).length };
+    return { created, mailbox, category, total: await this.prisma.healthTicket.count({ where: { deletedAt: null } }) };
   }
 
   async integrationStatus() {

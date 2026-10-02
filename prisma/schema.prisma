@@ -41,6 +41,7 @@ model Property {
   waterBodies            WaterBody[]
   salesActivities        SalesActivity[]
   reportIncidents        ReportIncident[]
+  complaints             Complaint[]
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   legacySource           String?
@@ -246,6 +247,20 @@ model HealthTicket {
   @@index([status])
   @@index([visitDate])
   @@index([conversationId])
+}
+
+model Complaint {
+  id              String   @id @default(uuid())
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  complaint       String
+  requiresEstimate Boolean @default(false)
+  status          String   @default("OPEN")
+  updatedAt       DateTime @updatedAt
+
+  @@index([propertyId, createdAt])
+  @@index([status, createdAt])
 }
 
 model HealthInspectionReminder {

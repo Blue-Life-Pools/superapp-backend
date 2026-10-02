@@ -10,6 +10,7 @@ import { ChemicalsModule } from './chemicals/chemicals.module';
 import { HealthDepartmentModule } from './health-department/health-department.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuthModule } from './auth/auth.module';
+import { ComplaintsModule } from './complaints/complaints.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AuthModule } from './auth/auth.module';
     HealthDepartmentModule,
     ReportsModule,
     AuthModule,
+    ComplaintsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
