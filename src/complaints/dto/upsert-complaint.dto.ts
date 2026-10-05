@@ -27,6 +27,10 @@ export class UpsertComplaintDto {
   typeOfCall?: string;
 
   @IsOptional()
+  @IsDateString()
+  reminderAt?: string | null;
+
+  @IsOptional()
   @IsIn(['OPEN', 'IN_PROGRESS', 'RESOLVED'])
   status?: string;
 }

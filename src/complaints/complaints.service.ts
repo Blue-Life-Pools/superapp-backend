@@ -16,7 +16,7 @@ export class ComplaintsService {
   async create(data: UpsertComplaintDto) {
     await this.ensureProperty(data.propertyId);
     return this.prisma.complaint.create({
-      data: { ...data, complaint: data.complaint.trim(), createdAt: data.createdAt ? new Date(data.createdAt) : undefined },
+      data: { ...data, complaint: data.complaint.trim(), createdAt: data.createdAt ? new Date(data.createdAt) : undefined, reminderAt: data.reminderAt ? new Date(data.reminderAt) : null },
       include: { property: { select: { id: true, name: true } } },
     });
   }
@@ -25,7 +25,7 @@ export class ComplaintsService {
     await this.ensureProperty(data.propertyId);
     return this.prisma.complaint.update({
       where: { id },
-      data: { ...data, complaint: data.complaint.trim(), createdAt: data.createdAt ? new Date(data.createdAt) : undefined },
+      data: { ...data, complaint: data.complaint.trim(), createdAt: data.createdAt ? new Date(data.createdAt) : undefined, reminderAt: data.reminderAt ? new Date(data.reminderAt) : null },
       include: { property: { select: { id: true, name: true } } },
     });
   }
