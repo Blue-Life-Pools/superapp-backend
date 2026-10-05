@@ -23,6 +23,10 @@ export class UpsertComplaintDto {
   estimateDescription?: string;
 
   @IsOptional()
+  @IsIn(['CALL', 'COMPLAINT'])
+  typeOfCall?: string;
+
+  @IsOptional()
   @IsIn(['OPEN', 'IN_PROGRESS', 'RESOLVED'])
   status?: string;
 }

@@ -257,6 +257,7 @@ model Complaint {
   complaint       String
   requiresEstimate Boolean @default(false)
   estimateDescription String?
+  typeOfCall      String   @default("CALL")
   status          String   @default("OPEN")
   updatedAt       DateTime @updatedAt
 
