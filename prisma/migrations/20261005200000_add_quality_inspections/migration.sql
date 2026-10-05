@@ -5,8 +5,8 @@ CREATE TABLE "QualityInspection" (
     "technicianName" TEXT NOT NULL,
     "visitDate" TIMESTAMP(3) NOT NULL,
     "readings" JSONB,
-    "notes" TEXT,
     "photos" JSONB,
+    "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "QualityInspection_pkey" PRIMARY KEY ("id")

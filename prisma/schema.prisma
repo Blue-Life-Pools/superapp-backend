@@ -105,6 +105,7 @@ model QualityInspection {
   technicianName String
   visitDate    DateTime
   readings     Json?
+  dosages      Json?
   notes        String?
   photos       Json?
   property     Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)

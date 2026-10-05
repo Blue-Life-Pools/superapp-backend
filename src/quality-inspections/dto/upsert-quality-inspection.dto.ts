@@ -16,6 +16,7 @@ export class UpsertQualityInspectionDto {
   @IsString() @MinLength(1) @MaxLength(200) technicianName!: string;
   @IsDateString() visitDate!: string;
   @IsOptional() @IsObject() readings?: Record<string, string>;
+  @IsOptional() @IsObject() dosages?: Record<string, string>;
   @IsOptional() @IsString() @MaxLength(10000) notes?: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => QualityFindingDto) findings?: QualityFindingDto[];
   @IsOptional() @IsArray() photos?: Array<{ name: string; type: string; data: string }>;
