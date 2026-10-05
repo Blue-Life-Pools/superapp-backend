@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/auth.decorators';
 import { ComplaintsService } from './complaints.service';
@@ -18,4 +18,7 @@ export class ComplaintsController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() data: UpsertComplaintDto) { return this.complaints.update(id, data); }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) { return this.complaints.remove(id); }
 }

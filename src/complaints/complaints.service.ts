@@ -30,6 +30,10 @@ export class ComplaintsService {
     });
   }
 
+  remove(id: string) {
+    return this.prisma.complaint.delete({ where: { id } });
+  }
+
   private async ensureProperty(id: string) {
     const property = await this.prisma.property.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
     if (!property) throw new NotFoundException('Property not found.');
