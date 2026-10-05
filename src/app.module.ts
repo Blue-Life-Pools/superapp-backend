@@ -11,6 +11,7 @@ import { HealthDepartmentModule } from './health-department/health-department.mo
 import { ReportsModule } from './reports/reports.module';
 import { AuthModule } from './auth/auth.module';
 import { ComplaintsModule } from './complaints/complaints.module';
+import { QualityInspectionsModule } from './quality-inspections/quality-inspections.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ComplaintsModule } from './complaints/complaints.module';
     ReportsModule,
     AuthModule,
     ComplaintsModule,
+    QualityInspectionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

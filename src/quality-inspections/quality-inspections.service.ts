@@ -1,0 +1,38 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { UpsertQualityInspectionDto } from './dto/upsert-quality-inspection.dto';
+
+@Injectable()
+export class QualityInspectionsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  list() {
+    return this.prisma.qualityInspection.findMany({
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { orderBy: { createdAt: 'desc' } } },
+      orderBy: { visitDate: 'desc' },
+    });
+  }
+
+  async create(data: UpsertQualityInspectionDto) {
+    await this.ensureRelations(data.propertyId, data.waterBodyId);
+    return this.prisma.qualityInspection.create({
+      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title.trim(), description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', resolution: finding.resolution?.trim() || null })) } },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: true },
+    });
+  }
+
+  async updateFinding(id: string, status: string, resolution?: string) {
+    const finding = await this.prisma.qualityFinding.findUnique({ where: { id } });
+    if (!finding) throw new NotFoundException('Finding not found.');
+    return this.prisma.qualityFinding.update({ where: { id }, data: { status, resolution: resolution?.trim() || null } });
+  }
+
+  private async ensureRelations(propertyId: string, waterBodyId?: string | null) {
+    const property = await this.prisma.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    if (!property) throw new NotFoundException('Property not found.');
+    if (waterBodyId) {
+      const waterBody = await this.prisma.waterBody.findFirst({ where: { id: waterBodyId, propertyId }, select: { id: true } });
+      if (!waterBody) throw new NotFoundException('Water body not found for this property.');
+    }
+  }
+}

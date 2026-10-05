@@ -42,6 +42,7 @@ model Property {
   salesActivities        SalesActivity[]
   reportIncidents        ReportIncident[]
   complaints             Complaint[]
+  qualityInspections     QualityInspection[]
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
   legacySource           String?
@@ -92,8 +93,44 @@ model WaterBody {
   active     Boolean @default(true)
 
   property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  qualityInspections QualityInspection[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model QualityInspection {
+  id           String          @id @default(uuid())
+  propertyId   String
+  waterBodyId  String?
+  technicianName String
+  visitDate    DateTime
+  readings     Json?
+  notes        String?
+  photos       Json?
+  property     Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  waterBody    WaterBody?      @relation(fields: [waterBodyId], references: [id], onDelete: SetNull)
+  findings     QualityFinding[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([propertyId, visitDate])
+  @@index([visitDate])
+}
+
+model QualityFinding {
+  id           String            @id @default(uuid())
+  inspectionId String
+  title        String
+  description  String
+  severity     String            @default("MEDIUM")
+  status       String            @default("OPEN")
+  resolution   String?
+  inspection   QualityInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([inspectionId])
+  @@index([status])
 }
 
 model ChemicalReport {
