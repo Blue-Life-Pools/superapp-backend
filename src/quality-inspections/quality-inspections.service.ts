@@ -16,7 +16,7 @@ export class QualityInspectionsService {
   async create(data: UpsertQualityInspectionDto) {
     await this.ensureRelations(data.propertyId, data.waterBodyId);
     return this.prisma.qualityInspection.create({
-      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title.trim(), description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', resolution: finding.resolution?.trim() || null })) } },
+      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', resolution: finding.resolution?.trim() || null, photos: finding.photos || [] })) } },
       include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: true },
     });
   }
