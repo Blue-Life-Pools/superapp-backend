@@ -256,6 +256,7 @@ model Complaint {
   createdAt       DateTime @default(now())
   complaint       String
   requiresEstimate Boolean @default(false)
+  estimateDescription String?
   status          String   @default("OPEN")
   updatedAt       DateTime @updatedAt
 

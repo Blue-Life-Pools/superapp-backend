@@ -18,6 +18,11 @@ export class UpsertComplaintDto {
   requiresEstimate?: boolean;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  estimateDescription?: string;
+
+  @IsOptional()
   @IsIn(['OPEN', 'IN_PROGRESS', 'RESOLVED'])
   status?: string;
 }
