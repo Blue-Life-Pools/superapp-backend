@@ -125,6 +125,7 @@ model QualityFinding {
   description  String
   severity     String            @default("MEDIUM")
   status       String            @default("OPEN")
+  requiresEstimate Boolean       @default(false)
   resolution   String?
   photos       Json?
   inspection   QualityInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)

@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QualityFindingDto {
@@ -6,6 +6,7 @@ export class QualityFindingDto {
   @IsString() @MinLength(1) @MaxLength(5000) description!: string;
   @IsOptional() @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) severity?: string;
   @IsOptional() @IsIn(['OPEN', 'IN_PROGRESS', 'RESOLVED']) status?: string;
+  @IsOptional() @IsBoolean() requiresEstimate?: boolean;
   @IsOptional() @IsString() @MaxLength(5000) resolution?: string;
   @IsOptional() @IsArray() photos?: Array<{ name: string; type: string; data: string }>;
 }
