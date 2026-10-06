@@ -88,6 +88,11 @@ export class CreatePropertyDto {
   segment?: string;
 
   @IsOptional()
+  @Transform(({ value }) => normalizeUpper(value))
+  @IsIn(['CLIENT', 'LEAD', 'INACTIVE'])
+  lifecycleStatus?: string;
+
+  @IsOptional()
   @IsString()
   managementCompanyName?: string;
 
