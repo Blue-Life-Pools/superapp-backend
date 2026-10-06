@@ -27,6 +27,18 @@ export class QualityInspectionsService {
     return this.prisma.qualityFinding.update({ where: { id }, data: { status, resolution: resolution?.trim() || null } });
   }
 
+  async deleteFinding(id: string) {
+    const finding = await this.prisma.qualityFinding.findUnique({ where: { id }, select: { id: true } });
+    if (!finding) throw new NotFoundException('Finding not found.');
+    return this.prisma.qualityFinding.delete({ where: { id } });
+  }
+
+  async deleteInspection(id: string) {
+    const inspection = await this.prisma.qualityInspection.findUnique({ where: { id }, select: { id: true } });
+    if (!inspection) throw new NotFoundException('Quality inspection not found.');
+    return this.prisma.qualityInspection.delete({ where: { id } });
+  }
+
   private async ensureRelations(propertyId: string, waterBodyId?: string | null) {
     const property = await this.prisma.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
     if (!property) throw new NotFoundException('Property not found.');

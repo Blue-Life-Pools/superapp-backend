@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/auth.decorators';
 import { QualityInspectionsService } from './quality-inspections.service';
@@ -12,4 +12,6 @@ export class QualityInspectionsController {
   @Get() list() { return this.service.list(); }
   @Post() create(@Body() data: UpsertQualityInspectionDto) { return this.service.create(data); }
   @Patch('findings/:id') updateFinding(@Param('id') id: string, @Body() data: { status: string; resolution?: string }) { return this.service.updateFinding(id, data.status, data.resolution); }
+  @Delete('findings/:id') @Roles('SUPER_ADMIN') deleteFinding(@Param('id') id: string) { return this.service.deleteFinding(id); }
+  @Delete(':id') @Roles('SUPER_ADMIN') deleteInspection(@Param('id') id: string) { return this.service.deleteInspection(id); }
 }
