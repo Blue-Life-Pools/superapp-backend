@@ -194,10 +194,18 @@ export class PropertiesService {
     });
 
     if (duplicate) {
+      const duplicateAddress =
+        Boolean(requestedAddress && requestedZip) &&
+        this.normalizePropertyIdentity(duplicate.addressLine1) === requestedAddress &&
+        this.normalizePropertyIdentity(duplicate.city) === requestedCity &&
+        this.normalizePropertyIdentity(duplicate.state) === requestedState &&
+        this.normalizePropertyIdentity(duplicate.zipCode) === requestedZip;
       throw new BadRequestException(
-        duplicate.deletedAt
-          ? `A deleted property named "${duplicate.name}" already exists. Restore that record instead of creating a duplicate.`
-          : `A property named "${duplicate.name}" already exists. Open the existing record instead of creating a duplicate.`,
+        duplicateAddress
+          ? `A property with this address already exists: "${duplicate.name}". Open the existing record instead of creating a duplicate.`
+          : duplicate.deletedAt
+            ? `A deleted property named "${duplicate.name}" already exists. Restore that record instead of creating a duplicate.`
+            : `A property named "${duplicate.name}" already exists. Open the existing record instead of creating a duplicate.`,
       );
     }
 
@@ -809,6 +817,29 @@ export class PropertiesService {
 
     if (!existing) {
       throw new NotFoundException(`No se encontró la propiedad con id ${id}`);
+    }
+
+    const candidateName = propertyData.name ?? existing.name;
+    const candidateAddress = propertyData.addressLine1 ?? existing.addressLine1;
+    const candidateCity = propertyData.city ?? existing.city;
+    const candidateState = propertyData.state ?? existing.state;
+    const candidateZip = propertyData.zipCode ?? existing.zipCode;
+    const peers = await this.prisma.property.findMany({
+      where: { id: { not: id } },
+      select: { name: true, addressLine1: true, city: true, state: true, zipCode: true },
+    });
+    const duplicatePeer = peers.find((property) =>
+      this.normalizePropertyIdentity(property.name) === this.normalizePropertyIdentity(candidateName) ||
+      (Boolean(this.normalizePropertyIdentity(candidateAddress) && this.normalizePropertyIdentity(candidateZip)) &&
+        this.normalizePropertyIdentity(property.addressLine1) === this.normalizePropertyIdentity(candidateAddress) &&
+        this.normalizePropertyIdentity(property.city) === this.normalizePropertyIdentity(candidateCity) &&
+        this.normalizePropertyIdentity(property.state) === this.normalizePropertyIdentity(candidateState) &&
+        this.normalizePropertyIdentity(property.zipCode) === this.normalizePropertyIdentity(candidateZip)),
+    );
+    if (duplicatePeer) {
+      throw new BadRequestException(
+        `A property with this name or address already exists: "${duplicatePeer.name}". Open the existing record instead of creating a duplicate.`,
+      );
     }
 
     if (contacts === undefined && waterBodies === undefined) {
