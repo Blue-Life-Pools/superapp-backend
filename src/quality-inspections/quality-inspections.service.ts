@@ -8,9 +8,18 @@ export class QualityInspectionsService {
 
   list() {
     return this.prisma.qualityInspection.findMany({
-      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { orderBy: { createdAt: 'desc' } } },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, title: true, description: true, severity: true, status: true, requiresEstimate: true, resolution: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
       orderBy: { visitDate: 'desc' },
     });
+  }
+
+  async detail(id: string) {
+    const inspection = await this.prisma.qualityInspection.findUnique({
+      where: { id },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { orderBy: { createdAt: 'desc' } } },
+    });
+    if (!inspection) throw new NotFoundException('Quality inspection not found.');
+    return inspection;
   }
 
   async create(data: UpsertQualityInspectionDto) {

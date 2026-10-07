@@ -10,6 +10,7 @@ import { UpsertQualityInspectionDto } from './dto/upsert-quality-inspection.dto'
 export class QualityInspectionsController {
   constructor(private readonly service: QualityInspectionsService) {}
   @Get() list() { return this.service.list(); }
+  @Get(':id') detail(@Param('id') id: string) { return this.service.detail(id); }
   @Post() create(@Body() data: UpsertQualityInspectionDto) { return this.service.create(data); }
   @Patch('findings/:id') updateFinding(@Param('id') id: string, @Body() data: { status: string; resolution?: string }) { return this.service.updateFinding(id, data.status, data.resolution); }
   @Delete('findings/:id') @Roles('SUPER_ADMIN') deleteFinding(@Param('id') id: string) { return this.service.deleteFinding(id); }
