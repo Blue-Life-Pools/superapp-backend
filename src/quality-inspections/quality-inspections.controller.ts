@@ -12,6 +12,7 @@ export class QualityInspectionsController {
   @Get() list() { return this.service.list(); }
   @Get(':id') detail(@Param('id') id: string) { return this.service.detail(id); }
   @Post() create(@Body() data: UpsertQualityInspectionDto) { return this.service.create(data); }
+  @Patch(':id') update(@Param('id') id: string, @Body() data: UpsertQualityInspectionDto) { return this.service.update(id, data); }
   @Patch('findings/:id') updateFinding(@Param('id') id: string, @Body() data: { status: string; resolution?: string }) { return this.service.updateFinding(id, data.status, data.resolution); }
   @Delete('findings/:id') @Roles('SUPER_ADMIN') deleteFinding(@Param('id') id: string) { return this.service.deleteFinding(id); }
   @Delete(':id') @Roles('SUPER_ADMIN') deleteInspection(@Param('id') id: string) { return this.service.deleteInspection(id); }

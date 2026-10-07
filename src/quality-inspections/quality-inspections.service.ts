@@ -30,6 +30,20 @@ export class QualityInspectionsService {
     });
   }
 
+  async update(id: string, data: UpsertQualityInspectionDto) {
+    await this.ensureRelations(data.propertyId, data.waterBodyId);
+    const inspection = await this.prisma.qualityInspection.findUnique({ where: { id }, select: { id: true } });
+    if (!inspection) throw new NotFoundException('Quality inspection not found.');
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.qualityFinding.deleteMany({ where: { inspectionId: id } });
+      await transaction.qualityInspection.update({
+        where: { id },
+        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, photos: finding.photos || [] })) } },
+      });
+    });
+    return this.detail(id);
+  }
+
   async updateFinding(id: string, status: string, resolution?: string) {
     const finding = await this.prisma.qualityFinding.findUnique({ where: { id } });
     if (!finding) throw new NotFoundException('Finding not found.');
