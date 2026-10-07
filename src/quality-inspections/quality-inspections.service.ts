@@ -8,7 +8,7 @@ export class QualityInspectionsService {
 
   list() {
     return this.prisma.qualityInspection.findMany({
-      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, title: true, description: true, severity: true, status: true, requiresEstimate: true, resolution: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { orderBy: { createdAt: 'desc' } } },
       orderBy: { visitDate: 'desc' },
     });
   }
