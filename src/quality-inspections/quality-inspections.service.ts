@@ -25,7 +25,7 @@ export class QualityInspectionsService {
   async create(data: UpsertQualityInspectionDto) {
     await this.ensureRelations(data.propertyId, data.waterBodyId);
     return this.prisma.qualityInspection.create({
-      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, photos: finding.photos || [] })) } },
+      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: finding.photos || [] })) } },
       include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: true },
     });
   }
@@ -38,16 +38,16 @@ export class QualityInspectionsService {
       await transaction.qualityFinding.deleteMany({ where: { inspectionId: id } });
       await transaction.qualityInspection.update({
         where: { id },
-        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, photos: finding.photos || [] })) } },
+        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: finding.photos || [] })) } },
       });
     });
     return this.detail(id);
   }
 
-  async updateFinding(id: string, status: string, resolution?: string) {
+  async updateFinding(id: string, data: { status: string; resolution?: string; resolvedAt?: string | null; responsibleName?: string | null; estimateNumber?: string | null; estimateSentAt?: string | null }) {
     const finding = await this.prisma.qualityFinding.findUnique({ where: { id } });
     if (!finding) throw new NotFoundException('Finding not found.');
-    return this.prisma.qualityFinding.update({ where: { id }, data: { status, resolution: resolution?.trim() || null } });
+    return this.prisma.qualityFinding.update({ where: { id }, data: { status: data.status, resolution: data.resolution?.trim() || null, responsibleName: data.responsibleName?.trim() || null, resolvedAt: data.resolvedAt ? new Date(data.resolvedAt) : data.status === 'RESOLVED' ? new Date() : null, estimateNumber: data.estimateNumber?.trim() || null, estimateSentAt: data.estimateSentAt ? new Date(data.estimateSentAt) : null } });
   }
 
   async deleteFinding(id: string) {

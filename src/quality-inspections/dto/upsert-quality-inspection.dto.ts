@@ -6,8 +6,12 @@ export class QualityFindingDto {
   @IsString() @MinLength(1) @MaxLength(5000) description!: string;
   @IsOptional() @IsIn(['LOW', 'MEDIUM', 'HIGH']) severity?: string;
   @IsOptional() @IsIn(['OPEN', 'IN_PROGRESS', 'RESOLVED']) status?: string;
+  @IsOptional() @IsString() @MaxLength(200) responsibleName?: string;
   @IsOptional() @IsBoolean() requiresEstimate?: boolean;
   @IsOptional() @IsString() @MaxLength(5000) resolution?: string;
+  @IsOptional() @IsDateString() resolvedAt?: string | null;
+  @IsOptional() @IsString() @MaxLength(120) estimateNumber?: string | null;
+  @IsOptional() @IsDateString() estimateSentAt?: string | null;
   @IsOptional() @IsArray() photos?: Array<{ name: string; type: string; data: string }>;
 }
 
