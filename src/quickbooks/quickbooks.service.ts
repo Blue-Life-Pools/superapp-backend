@@ -136,8 +136,15 @@ export class QuickBooksService {
     const query = `select * from Estimate where DocNumber = '${safeNumber}'`;
     const url = `${this.apiBaseUrl()}/v3/company/${encodeURIComponent(connection.realmId)}/query?query=${encodeURIComponent(query)}`;
     const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
-    const payload = (await response.json()) as { QueryResponse?: { Estimate?: Array<Record<string, unknown>> }; Fault?: unknown };
-    if (!response.ok) throw new BadRequestException('QuickBooks could not read the estimate.');
+    const payload = (await response.json()) as {
+      QueryResponse?: { Estimate?: Array<Record<string, unknown>> };
+      Fault?: { Error?: Array<{ Message?: string; Detail?: string }> };
+    };
+    if (!response.ok) {
+      const fault = payload.Fault?.Error?.[0];
+      const detail = fault?.Detail || fault?.Message || `HTTP ${response.status}`;
+      throw new BadRequestException(`QuickBooks could not read the estimate: ${detail}`);
+    }
     const estimate = payload.QueryResponse?.Estimate?.[0];
     if (!estimate) throw new BadRequestException(`Estimate ${number} was not found in QuickBooks.`);
     return {
