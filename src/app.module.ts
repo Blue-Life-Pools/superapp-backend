@@ -12,6 +12,7 @@ import { ReportsModule } from './reports/reports.module';
 import { AuthModule } from './auth/auth.module';
 import { ComplaintsModule } from './complaints/complaints.module';
 import { QualityInspectionsModule } from './quality-inspections/quality-inspections.module';
+import { QuickBooksModule } from './quickbooks/quickbooks.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { QualityInspectionsModule } from './quality-inspections/quality-inspecti
     AuthModule,
     ComplaintsModule,
     QualityInspectionsModule,
+    QuickBooksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

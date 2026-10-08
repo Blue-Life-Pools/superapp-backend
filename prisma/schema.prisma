@@ -50,11 +50,67 @@ model Property {
   maintenanceChiefInfo   String?
   followUpNotes          String?
   lifecycleStatus        String             @default("LEAD")
+  quickbooksCustomerId   String?
   serviceStartDate       DateTime?
   regularMaintenanceData Json?
   deletedAt              DateTime?
+  quickbooksEstimates    QuickBooksEstimate[]
 
   @@index([lifecycleStatus])
+}
+
+model QuickBooksConnection {
+  id           String   @id @default(uuid())
+  realmId      String   @unique
+  environment  String   @default("production")
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model QuickBooksEstimate {
+  id                    String                  @id @default(uuid())
+  propertyId            String
+  quickbooksEstimateId  String                  @unique
+  estimateNumber        String
+  status                String                  @default("Pending")
+  estimateDate          DateTime?
+  totalAmount           Decimal?
+  subtotalAmount        Decimal?
+  taxAmount             Decimal?
+  customerMemo          String?
+  billEmail             String?
+  quickbooksUpdatedAt   DateTime?
+  lastSyncedAt          DateTime?
+  syncSource            String                  @default("QUICKBOOKS")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  property              Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lines                 QuickBooksEstimateLine[]
+
+  @@unique([propertyId, estimateNumber])
+  @@index([propertyId, status])
+}
+
+model QuickBooksEstimateLine {
+  id                  String             @id @default(uuid())
+  estimateId          String
+  lineNumber          Int
+  itemRefId           String?
+  itemName            String?
+  description         String?
+  quantity            Decimal?
+  unitPrice            Decimal?
+  amount              Decimal?
+  taxCode             String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  estimate            QuickBooksEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@unique([estimateId, lineNumber])
+  @@index([estimateId])
 }
 
 model Contact {

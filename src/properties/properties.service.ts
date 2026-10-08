@@ -111,6 +111,11 @@ export class PropertiesService {
             },
           },
         },
+
+        quickbooksEstimates: {
+          orderBy: { estimateNumber: 'desc' },
+          include: { lines: { orderBy: { lineNumber: 'asc' } } },
+        },
       },
     });
   }
@@ -143,6 +148,11 @@ export class PropertiesService {
               },
             },
           },
+        },
+
+        quickbooksEstimates: {
+          orderBy: { estimateNumber: 'desc' },
+          include: { lines: { orderBy: { lineNumber: 'asc' } } },
         },
       },
     });
