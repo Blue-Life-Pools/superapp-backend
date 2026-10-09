@@ -9,7 +9,7 @@ export function allowedAreas(role: AppRole) {
     return ['home', 'commercial', 'chemicals', 'health', 'reports', 'complaints', 'quality'] as const;
   }
   if (role === 'QUALITY') {
-    return ['home', 'quality'] as const;
+    return ['quality'] as const;
   }
   return ['home', role.toLowerCase()] as const;
 }
