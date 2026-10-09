@@ -23,7 +23,7 @@ export class HealthLoginDto {
 
 @Controller('health-department')
 @ApiTags('Health Department')
-@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY')
 export class HealthDepartmentController {
   constructor(private readonly health: HealthDepartmentService) {}
 
