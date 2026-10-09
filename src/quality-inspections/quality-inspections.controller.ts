@@ -6,7 +6,7 @@ import { UpsertQualityInspectionDto } from './dto/upsert-quality-inspection.dto'
 
 @Controller('quality-inspections')
 @ApiTags('Quality inspections')
-@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY')
 export class QualityInspectionsController {
   constructor(private readonly service: QualityInspectionsService) {}
   @Get() list() { return this.service.list(); }

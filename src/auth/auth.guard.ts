@@ -33,7 +33,7 @@ export class AuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (roles?.length && user.role !== 'SUPER_ADMIN' && !roles.includes(user.role)) {
+    if (roles?.length && !['SUPER_ADMIN', 'OPERATIONS_DIRECTOR'].includes(user.role) && !roles.includes(user.role)) {
       throw new ForbiddenException('This account cannot access this section.');
     }
     return true;

@@ -6,7 +6,7 @@ import { UpsertComplaintDto } from './dto/upsert-complaint.dto';
 
 @Controller('complaints')
 @ApiTags('Complaints')
-@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS')
+@Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY')
 export class ComplaintsController {
   constructor(private readonly complaints: ComplaintsService) {}
 

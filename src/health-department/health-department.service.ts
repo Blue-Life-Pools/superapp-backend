@@ -83,7 +83,7 @@ export class HealthDepartmentService implements OnModuleInit, OnModuleDestroy {
     if (!token) throw new UnauthorizedException('Admin login required.');
     const hash = createHash('sha256').update(token).digest('hex');
     const appSession = await this.prisma.appSession.findUnique({ where: { tokenHash: hash }, include: { user: true } });
-    let valid = !!appSession && appSession.expiresAt > new Date() && appSession.user.active && ['HEALTH', 'SUPER_ADMIN'].includes(appSession.user.role);
+    let valid = !!appSession && appSession.expiresAt > new Date() && appSession.user.active && ['HEALTH', 'OPERATIONS_DIRECTOR', 'SUPER_ADMIN'].includes(appSession.user.role);
     if (!valid) {
       const owner = await this.prisma.chemicalOwnerSession.findUnique({ where: { tokenHash: hash }, include: { owner: true } });
       valid = !!owner && owner.expiresAt > new Date() && owner.owner.active;

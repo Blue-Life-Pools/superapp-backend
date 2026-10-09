@@ -6,7 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const [, , emailInput, roleInput] = process.argv;
 const email = (emailInput || '').trim().toLowerCase();
 const role = (roleInput || '').trim().toUpperCase();
-const allowedRoles = ['COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'SUPER_ADMIN'];
+const allowedRoles = ['COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY', 'OPERATIONS_DIRECTOR', 'SUPER_ADMIN'];
 
 if (!/^\S+@\S+\.\S+$/.test(email) || !allowedRoles.includes(role)) {
   console.error('Usage: npm run users:role -- email ROLE');
