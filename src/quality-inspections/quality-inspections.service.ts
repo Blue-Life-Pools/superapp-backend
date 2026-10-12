@@ -32,13 +32,14 @@ export class QualityInspectionsService {
 
   async update(id: string, data: UpsertQualityInspectionDto) {
     await this.ensureRelations(data.propertyId, data.waterBodyId);
-    const inspection = await this.prisma.qualityInspection.findUnique({ where: { id }, select: { id: true } });
+    const inspection = await this.prisma.qualityInspection.findUnique({ where: { id }, select: { id: true, photos: true } });
     if (!inspection) throw new NotFoundException('Quality inspection not found.');
     await this.prisma.$transaction(async (transaction) => {
+      const existingFindings = await transaction.qualityFinding.findMany({ where: { inspectionId: id }, select: { id: true, photos: true } });
       await transaction.qualityFinding.deleteMany({ where: { inspectionId: id } });
       await transaction.qualityInspection.update({
         where: { id },
-        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: finding.photos || [] })) } },
+        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: (data.photos ?? inspection.photos ?? []) as any, findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: (finding.photos ?? existingFindings.find((existing) => existing.id === finding.id)?.photos ?? []) as any })) } },
       });
     });
     return this.detail(id);
