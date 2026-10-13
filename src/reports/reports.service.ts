@@ -67,6 +67,13 @@ export class ReportsService {
     }
   }
 
+  people() {
+    return this.prisma.reportPerson.findMany({
+      where: { active: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    });
+  }
+
   async dashboard() {
     await this.ensureTypes();
     const [incidents, people, types] = await Promise.all([

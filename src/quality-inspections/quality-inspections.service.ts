@@ -2,19 +2,45 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertQualityInspectionDto } from './dto/upsert-quality-inspection.dto';
 
+// Never read image JSON in directory queries: filtering it after findMany still
+// transfers the images from Neon to the backend on every request.
+const findingSummarySelect = {
+  id: true, inspectionId: true, title: true, description: true, severity: true,
+  status: true, responsibleName: true, requiresEstimate: true, resolution: true,
+  resolvedAt: true, resolvedByName: true, resolutionUpdatedByName: true,
+  estimateNumber: true, estimateSentAt: true, createdAt: true, updatedAt: true,
+} as const;
+
 @Injectable()
 export class QualityInspectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
+  async list(propertyId?: string) {
     const inspections = await this.prisma.qualityInspection.findMany({
-      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, resolvedByName: true, resolutionUpdatedByName: true, estimateNumber: true, estimateSentAt: true, photos: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
+      where: propertyId ? { propertyId } : undefined,
+      select: {
+        id: true, propertyId: true, waterBodyId: true, technicianName: true,
+        visitDate: true, readings: true, dosages: true, notes: true,
+        createdAt: true, updatedAt: true,
+        property: { select: { id: true, name: true } },
+        waterBody: { select: { id: true, name: true } },
+        findings: { select: findingSummarySelect, orderBy: { createdAt: 'desc' } },
+      },
       orderBy: { visitDate: 'desc' },
     });
     return inspections.map((inspection) => ({
       ...inspection,
       findings: inspection.findings.map((finding) => this.normalizeFinding(finding)),
     }));
+  }
+
+  async photos(id: string) {
+    const inspection = await this.prisma.qualityInspection.findUnique({
+      where: { id },
+      select: { id: true, findings: { select: { id: true, photos: true } } },
+    });
+    if (!inspection) throw new NotFoundException('Quality inspection not found.');
+    return inspection;
   }
 
   async detail(id: string) {
@@ -53,10 +79,10 @@ export class QualityInspectionsService {
   }
 
   async updateFinding(id: string, data: { status: string; resolution?: string; resolvedAt?: string | null; responsibleName?: string | null; estimateNumber?: string | null; estimateSentAt?: string | null }, actorName?: string) {
-    const finding = await this.prisma.qualityFinding.findUnique({ where: { id } });
+    const finding = await this.prisma.qualityFinding.findUnique({ where: { id }, select: findingSummarySelect });
     if (!finding) throw new NotFoundException('Finding not found.');
     const actor = actorName?.trim() || null;
-    return this.prisma.qualityFinding.update({ where: { id }, data: { status: data.status, resolution: data.resolution?.trim() || null, responsibleName: data.responsibleName?.trim() || null, resolvedAt: data.resolvedAt ? new Date(data.resolvedAt) : data.status === 'RESOLVED' ? new Date() : null, resolvedByName: data.status === 'RESOLVED' ? actor : finding.resolvedByName, resolutionUpdatedByName: data.resolution !== undefined ? actor : finding.resolutionUpdatedByName, estimateNumber: data.estimateNumber?.trim() || null, estimateSentAt: data.estimateSentAt ? new Date(data.estimateSentAt) : null } });
+    return this.prisma.qualityFinding.update({ where: { id }, select: findingSummarySelect, data: { status: data.status, resolution: data.resolution?.trim() || null, responsibleName: data.responsibleName?.trim() || null, resolvedAt: data.resolvedAt ? new Date(data.resolvedAt) : data.status === 'RESOLVED' ? new Date() : null, resolvedByName: data.status === 'RESOLVED' ? actor : finding.resolvedByName, resolutionUpdatedByName: data.resolution !== undefined ? actor : finding.resolutionUpdatedByName, estimateNumber: data.estimateNumber?.trim() || null, estimateSentAt: data.estimateSentAt ? new Date(data.estimateSentAt) : null } });
   }
 
   async deleteFinding(id: string) {

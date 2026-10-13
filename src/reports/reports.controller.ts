@@ -38,6 +38,9 @@ export class ReportsController {
   @Get() dashboard() {
     return this.reports.dashboard();
   }
+  @Get('people') people() {
+    return this.reports.people();
+  }
   @Post('incidents')
   @Roles('REPORTS')
   @ApiOperation({ summary: 'Create a pending report incident' })
