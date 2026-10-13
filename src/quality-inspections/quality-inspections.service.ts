@@ -8,7 +8,7 @@ export class QualityInspectionsService {
 
   async list() {
     const inspections = await this.prisma.qualityInspection.findMany({
-      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, resolvedByName: true, resolutionUpdatedByName: true, estimateNumber: true, estimateSentAt: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, resolvedByName: true, resolutionUpdatedByName: true, estimateNumber: true, estimateSentAt: true, photos: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
       orderBy: { visitDate: 'desc' },
     });
     return inspections.map((inspection) => ({
