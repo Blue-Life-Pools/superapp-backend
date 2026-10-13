@@ -55,6 +55,7 @@ model Property {
   regularMaintenanceData Json?
   deletedAt              DateTime?
   quickbooksEstimates    QuickBooksEstimate[]
+  chemicalConsumptionPeriods ChemicalConsumptionPeriod[]
 
   @@index([lifecycleStatus])
 }
@@ -196,6 +197,25 @@ model QualityFinding {
 
   @@index([inspectionId])
   @@index([status])
+}
+
+model ChemicalConsumptionPeriod {
+  id String @id @default(uuid())
+  propertyId String
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  month String
+  monthlyFee Decimal? @db.Decimal(12, 2)
+  feeSource String?
+  chemicals Json @default("[]")
+  sourceName String?
+  budgetPercent Float?
+  seasonFactor Float @default(1)
+  references Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, month])
+  @@index([month])
 }
 
 model ChemicalReport {
