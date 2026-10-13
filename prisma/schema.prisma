@@ -449,6 +449,7 @@ model ReportIncident {
   inspector         ReportPerson?      @relation("ReportIncidentInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
   status            String             @default("PENDING")
   resolution        String?
+  solvedByName      String?
   solvedAt          DateTime?
   requiresEstimate  Boolean            @default(false)
   estimateNumber    String?

@@ -115,7 +115,7 @@ export class ReportsService {
     });
   }
 
-  async updateIncident(id: string, data: UpdateReportIncidentDto) {
+  async updateIncident(id: string, data: UpdateReportIncidentDto, actorName?: string) {
     const current = await this.prisma.reportIncident.findUnique({
       where: { id },
     });
@@ -167,6 +167,12 @@ export class ReportsService {
         inspectorId: requiresInspector ? inspectorId : null,
         status: data.status,
         resolution,
+        solvedByName:
+          status === 'SOLVED'
+            ? actorName?.trim() || current.solvedByName
+            : data.status === 'PENDING'
+              ? null
+              : undefined,
         solvedAt:
           data.status === 'SOLVED'
             ? data.solvedAt

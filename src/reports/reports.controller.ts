@@ -9,7 +9,9 @@ import {
   Post,
   UploadedFile,
   UseInterceptors,
+  Req,
 } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBody,
@@ -79,8 +81,9 @@ export class ReportsController {
   updateIncident(
     @Param('id') id: string,
     @Body() data: UpdateReportIncidentDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.reports.updateIncident(id, data);
+    return this.reports.updateIncident(id, data, request.appUser?.name);
   }
   @Delete('incidents/:id')
   @Roles('REPORTS')
