@@ -185,6 +185,8 @@ model QualityFinding {
   requiresEstimate Boolean       @default(false)
   resolution   String?
   resolvedAt   DateTime?
+  resolvedByName String?
+  resolutionUpdatedByName String?
   estimateNumber String?
   estimateSentAt DateTime?
   photos       Json?

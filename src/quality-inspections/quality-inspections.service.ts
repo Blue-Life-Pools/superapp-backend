@@ -8,7 +8,7 @@ export class QualityInspectionsService {
 
   async list() {
     const inspections = await this.prisma.qualityInspection.findMany({
-      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, estimateNumber: true, estimateSentAt: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
+      include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, resolvedByName: true, resolutionUpdatedByName: true, estimateNumber: true, estimateSentAt: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
       orderBy: { visitDate: 'desc' },
     });
     return inspections.map((inspection) => ({
@@ -52,10 +52,11 @@ export class QualityInspectionsService {
     return this.detail(id);
   }
 
-  async updateFinding(id: string, data: { status: string; resolution?: string; resolvedAt?: string | null; responsibleName?: string | null; estimateNumber?: string | null; estimateSentAt?: string | null }) {
+  async updateFinding(id: string, data: { status: string; resolution?: string; resolvedAt?: string | null; responsibleName?: string | null; estimateNumber?: string | null; estimateSentAt?: string | null }, actorName?: string) {
     const finding = await this.prisma.qualityFinding.findUnique({ where: { id } });
     if (!finding) throw new NotFoundException('Finding not found.');
-    return this.prisma.qualityFinding.update({ where: { id }, data: { status: data.status, resolution: data.resolution?.trim() || null, responsibleName: data.responsibleName?.trim() || null, resolvedAt: data.resolvedAt ? new Date(data.resolvedAt) : data.status === 'RESOLVED' ? new Date() : null, estimateNumber: data.estimateNumber?.trim() || null, estimateSentAt: data.estimateSentAt ? new Date(data.estimateSentAt) : null } });
+    const actor = actorName?.trim() || null;
+    return this.prisma.qualityFinding.update({ where: { id }, data: { status: data.status, resolution: data.resolution?.trim() || null, responsibleName: data.responsibleName?.trim() || null, resolvedAt: data.resolvedAt ? new Date(data.resolvedAt) : data.status === 'RESOLVED' ? new Date() : null, resolvedByName: data.status === 'RESOLVED' ? actor : finding.resolvedByName, resolutionUpdatedByName: data.resolution !== undefined ? actor : finding.resolutionUpdatedByName, estimateNumber: data.estimateNumber?.trim() || null, estimateSentAt: data.estimateSentAt ? new Date(data.estimateSentAt) : null } });
   }
 
   async deleteFinding(id: string) {
