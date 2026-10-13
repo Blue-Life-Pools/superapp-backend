@@ -6,11 +6,15 @@ import { UpsertQualityInspectionDto } from './dto/upsert-quality-inspection.dto'
 export class QualityInspectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list() {
-    return this.prisma.qualityInspection.findMany({
+  async list() {
+    const inspections = await this.prisma.qualityInspection.findMany({
       include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { select: { id: true, inspectionId: true, title: true, description: true, severity: true, status: true, responsibleName: true, requiresEstimate: true, resolution: true, resolvedAt: true, estimateNumber: true, estimateSentAt: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: 'desc' } } },
       orderBy: { visitDate: 'desc' },
     });
+    return inspections.map((inspection) => ({
+      ...inspection,
+      findings: inspection.findings.map((finding) => this.normalizeFinding(finding)),
+    }));
   }
 
   async detail(id: string) {
@@ -19,13 +23,16 @@ export class QualityInspectionsService {
       include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: { orderBy: { createdAt: 'desc' } } },
     });
     if (!inspection) throw new NotFoundException('Quality inspection not found.');
-    return inspection;
+    return {
+      ...inspection,
+      findings: inspection.findings.map((finding) => this.normalizeFinding(finding)),
+    };
   }
 
   async create(data: UpsertQualityInspectionDto) {
     await this.ensureRelations(data.propertyId, data.waterBodyId);
     return this.prisma.qualityInspection.create({
-      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: finding.photos || [] })) } },
+      data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: data.photos || [], findings: { create: (data.findings || []).map((finding) => { const title = finding.title?.trim() || 'Finding'; return { title, description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: title === 'Chemical readings alert' ? false : finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: finding.photos || [] }; }) } },
       include: { property: { select: { id: true, name: true } }, waterBody: { select: { id: true, name: true } }, findings: true },
     });
   }
@@ -39,7 +46,7 @@ export class QualityInspectionsService {
       await transaction.qualityFinding.deleteMany({ where: { inspectionId: id } });
       await transaction.qualityInspection.update({
         where: { id },
-        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: (data.photos ?? inspection.photos ?? []) as any, findings: { create: (data.findings || []).map((finding) => ({ title: finding.title?.trim() || 'Finding', description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: (finding.photos ?? existingFindings.find((existing) => existing.id === finding.id)?.photos ?? []) as any })) } },
+        data: { propertyId: data.propertyId, waterBodyId: data.waterBodyId || null, technicianName: data.technicianName.trim(), visitDate: new Date(data.visitDate), readings: data.readings, dosages: data.dosages, notes: data.notes?.trim() || null, photos: (data.photos ?? inspection.photos ?? []) as any, findings: { create: (data.findings || []).map((finding) => { const title = finding.title?.trim() || 'Finding'; return { title, description: finding.description.trim(), severity: finding.severity || 'MEDIUM', status: finding.status || 'OPEN', responsibleName: finding.responsibleName?.trim() || null, requiresEstimate: title === 'Chemical readings alert' ? false : finding.requiresEstimate || false, resolution: finding.resolution?.trim() || null, resolvedAt: finding.resolvedAt ? new Date(finding.resolvedAt) : null, estimateNumber: finding.estimateNumber?.trim() || null, estimateSentAt: finding.estimateSentAt ? new Date(finding.estimateSentAt) : null, photos: (finding.photos ?? existingFindings.find((existing) => existing.id === finding.id)?.photos ?? []) as any }; }) } },
       });
     });
     return this.detail(id);
@@ -70,5 +77,12 @@ export class QualityInspectionsService {
       const waterBody = await this.prisma.waterBody.findFirst({ where: { id: waterBodyId, propertyId }, select: { id: true } });
       if (!waterBody) throw new NotFoundException('Water body not found for this property.');
     }
+  }
+
+  private normalizeFinding<T extends { title: string; requiresEstimate: boolean }>(finding: T) {
+    return {
+      ...finding,
+      requiresEstimate: finding.title === 'Chemical readings alert' ? false : finding.requiresEstimate,
+    };
   }
 }
