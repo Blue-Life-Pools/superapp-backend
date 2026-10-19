@@ -18,7 +18,7 @@ describe('Quality inspection transfer limits', () => {
     expect(query.select.findings.select.photos).toBeUndefined();
     expect(query.select.readings).toBe(true);
     expect(query.select.findings.select.resolvedByName).toBe(true);
-    expect(result[0].findings[0].requiresEstimate).toBe(false);
+    expect(result[0].findings[0].requiresEstimate).toBe(true);
   });
   it('filters at the database rather than downloading other properties', async () => {
     await service.list('property-1');
