@@ -33,14 +33,14 @@ export class ChemicalConsumptionService {
     const combined: any[] = periods.map((period) => {
       const archived = history.get(period.propertyId);
       return !period.sourceName && archived && historicalChemicals(archived, month)
-        ? { ...period, chemicals: historicalChemicals(archived, month), sourceName: 'Historico Skimmer 2025', historicalOnly: true }
+        ? { ...period, chemicals: historicalChemicals(archived, month), sourceName: 'Skimmer history 2025', historicalOnly: true }
         : period;
     });
     for (const property of properties) {
       if (combined.some((period) => period.propertyId === property.id)) continue;
       const archived = history.get(property.id);
       const chemicals = archived && historicalChemicals(archived, month);
-      if (chemicals) combined.push({ propertyId: property.id, property, month, chemicals, sourceName: 'Historico Skimmer 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
+      if (chemicals) combined.push({ propertyId: property.id, property, month, chemicals, sourceName: 'Skimmer history 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
     }
     return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
   }
@@ -104,6 +104,6 @@ export class ChemicalConsumptionService {
     ]);
     const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]).get(propertyId);
     const archived = history && !period.sourceName && historicalChemicals(history, month);
-    return this.present(archived ? { ...period, chemicals: archived, sourceName: 'Historico Skimmer 2025', historicalOnly: true } : period, history);
+    return this.present(archived ? { ...period, chemicals: archived, sourceName: 'Skimmer history 2025', historicalOnly: true } : period, history);
   }
 }

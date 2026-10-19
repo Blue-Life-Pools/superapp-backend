@@ -7,7 +7,9 @@ import { ConsumptionImportDto, UpdateConsumptionPeriodDto } from './dto/chemical
 @Roles('CHEMICALS')
 export class ChemicalConsumptionController {
   constructor(private readonly service: ChemicalConsumptionService) {}
-  @Get() list(@Query('month') month: string) { return this.service.list(month); }
+  @Get()
+  @Roles('COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY')
+  list(@Query('month') month: string) { return this.service.list(month); }
   @Post('preview') preview(@Body() data: ConsumptionImportDto) { return this.service.preview(data); }
   @Post('import') import(@Body() data: ConsumptionImportDto) { return this.service.import(data); }
   @Patch(':propertyId/:month') update(@Param('propertyId') id: string, @Param('month') month: string, @Body() data: UpdateConsumptionPeriodDto) { return this.service.update(id, month, data); }
