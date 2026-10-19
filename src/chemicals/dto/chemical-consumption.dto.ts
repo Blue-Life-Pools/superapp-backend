@@ -1,11 +1,17 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
+export class ConsumptionTechnicianUsageDto {
+  @IsString() @MaxLength(200) name!: string;
+  @IsNumber() @Min(0) quantity!: number;
+  @IsNumber() @Min(0) cost!: number;
+}
 export class ConsumptionChemicalDto {
   @IsString() @MaxLength(120) name!: string;
   @IsString() @MaxLength(40) unit!: string;
   @IsNumber() @Min(0) quantity!: number;
   @IsNumber() @Min(0) cost!: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ConsumptionTechnicianUsageDto) technicians?: ConsumptionTechnicianUsageDto[];
 }
 export class ConsumptionReferenceDto {
   @IsString() @MaxLength(120) name!: string;
