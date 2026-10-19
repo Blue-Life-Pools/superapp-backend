@@ -3,24 +3,48 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { allocateConsumption, distributeInteger } from './consumption-allocation';
 import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
+import type { HistoryProperty } from './consumption-history.types';
 
 const propertySelect = { id: true, name: true, code: true, waterBodies: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 @Injectable()
 export class ChemicalConsumptionService {
   constructor(private readonly prisma: PrismaService) {}
+  private historyCache?: { expiresAt: number; data: HistoryProperty[] };
+  private async readHistory() {
+    if (this.historyCache && this.historyCache.expiresAt > Date.now()) return this.historyCache.data;
+    const rows = await this.prisma.chemicalConsumptionHistory.findMany({ where: { sourceYear: 2025 }, select: { code: true, name: true, chemicals: true, factors: true } });
+    const data = rows as unknown as HistoryProperty[];
+    this.historyCache = { expiresAt: Date.now() + 300000, data };
+    return data;
+  }
   private validMonth(month: string) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new BadRequestException('Choose a valid month.');
   }
   async list(month: string) {
     this.validMonth(month);
-    const [properties, periods] = await Promise.all([
+    const [properties, periods, archive] = await Promise.all([
       this.prisma.property.findMany({ where: { deletedAt: null }, select: propertySelect, orderBy: { name: 'asc' } }),
       this.prisma.chemicalConsumptionPeriod.findMany({ where: { month, property: { deletedAt: null } }, include: { property: { select: propertySelect } } }),
+      this.readHistory(),
     ]);
-    return { properties, periods: periods.map((period) => this.present(period)) };
+    const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]);
+    const combined: any[] = periods.map((period) => {
+      const archived = history.get(period.propertyId);
+      return !period.sourceName && archived && historicalChemicals(archived, month)
+        ? { ...period, chemicals: historicalChemicals(archived, month), sourceName: 'Historico Skimmer 2025', historicalOnly: true }
+        : period;
+    });
+    for (const property of properties) {
+      if (combined.some((period) => period.propertyId === property.id)) continue;
+      const archived = history.get(property.id);
+      const chemicals = archived && historicalChemicals(archived, month);
+      if (chemicals) combined.push({ propertyId: property.id, property, month, chemicals, sourceName: 'Historico Skimmer 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
+    }
+    return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
   }
-  private present(period: any) {
+  private present(period: any, history?: HistoryProperty) {
     const chemicals = period.chemicals as ConsumptionChemicalDto[];
     const references = period.references as ConsumptionReferenceDto[];
     const totalCost = chemicals.reduce((sum, chemical) => sum + chemical.cost, 0);
@@ -28,9 +52,11 @@ export class ChemicalConsumptionService {
     const allocation = allocateConsumption(period.property.waterBodies, monthlyFee, totalCost);
     const alerts = chemicals.map((chemical) => {
       const reference = references.find((item) => nameKey(item.name) === nameKey(chemical.name) && item.unit.toLowerCase() === chemical.unit.toLowerCase());
-      const min = reference?.min === undefined ? null : reference.min * period.seasonFactor;
-      const max = reference?.max === undefined ? null : reference.max * period.seasonFactor;
-      return { ...chemical, expectedMin: min, expectedMax: max, status: !reference || (min === null && max === null) ? 'NO_REFERENCE' : max !== null && chemical.quantity > max ? 'HIGH' : min !== null && chemical.quantity < min ? 'LOW' : 'IN_RANGE' };
+      const manual = reference && (reference.min !== undefined || reference.max !== undefined);
+      const historical = manual ? null : historicalRange(history, chemical.name, chemical.unit, period.month);
+      const min = manual ? reference.min === undefined ? null : reference.min * period.seasonFactor : historical?.expectedMin ?? null;
+      const max = manual ? reference.max === undefined ? null : reference.max * period.seasonFactor : historical?.expectedMax ?? null;
+      return { ...chemical, ...historical, referenceSource: manual ? 'MANUAL' : historical ? 'HISTORY_2025' : null, expectedMin: min, expectedMax: max, excessQuantity: max !== null ? Math.max(0, chemical.quantity - max) : null, excessPercent: max !== null && max > 0 ? Math.max(0, (chemical.quantity / max - 1) * 100) : null, status: min === null && max === null ? 'NO_REFERENCE' : max !== null && chemical.quantity > max ? 'HIGH' : min !== null && chemical.quantity < min ? 'LOW' : 'IN_RANGE' };
     });
     const budget = monthlyFee === null || period.budgetPercent === null ? null : monthlyFee * period.budgetPercent / 100;
     const allocatedBodies = allocation.bodies.map((body, index) => {
@@ -72,6 +98,12 @@ export class ChemicalConsumptionService {
     if (!property) throw new NotFoundException('Property not found.');
     const values = { monthlyFee: data.monthlyFee, feeSource: 'MANUAL', budgetPercent: data.budgetPercent ?? null, seasonFactor: data.seasonFactor, references: data.references as unknown as Prisma.InputJsonValue };
     const period = await this.prisma.chemicalConsumptionPeriod.upsert({ where: { propertyId_month: { propertyId, month } }, create: { propertyId, month, ...values }, update: values, include: { property: { select: propertySelect } } });
-    return this.present(period);
+    const [properties, archive] = await Promise.all([
+      this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true } }),
+      this.readHistory(),
+    ]);
+    const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]).get(propertyId);
+    const archived = history && !period.sourceName && historicalChemicals(history, month);
+    return this.present(archived ? { ...period, chemicals: archived, sourceName: 'Historico Skimmer 2025', historicalOnly: true } : period, history);
   }
 }

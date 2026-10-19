@@ -199,6 +199,18 @@ model QualityFinding {
   @@index([status])
 }
 
+model ChemicalConsumptionHistory {
+  id String @id @default(uuid())
+  sourceYear Int
+  code String
+  name String
+  chemicals Json
+  factors Json
+  createdAt DateTime @default(now())
+
+  @@unique([sourceYear, code])
+}
+
 model ChemicalConsumptionPeriod {
   id String @id @default(uuid())
   propertyId String
