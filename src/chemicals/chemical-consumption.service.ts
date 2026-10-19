@@ -24,9 +24,11 @@ export class ChemicalConsumptionService {
   }
   async list(month: string) {
     this.validMonth(month);
-    const [properties, periods, archive] = await Promise.all([
+    const year = month.slice(0, 4);
+    const [properties, periods, allPeriods, archive] = await Promise.all([
       this.prisma.property.findMany({ where: { deletedAt: null }, select: propertySelect, orderBy: { name: 'asc' } }),
       this.prisma.chemicalConsumptionPeriod.findMany({ where: { month, property: { deletedAt: null } }, include: { property: { select: propertySelect } } }),
+      this.prisma.chemicalConsumptionPeriod.findMany({ where: { month: { startsWith: `${year}-` }, sourceName: { not: null }, property: { deletedAt: null } }, include: { property: { select: propertySelect } }, orderBy: [{ propertyId: 'asc' }, { month: 'asc' }] }),
       this.readHistory(),
     ]);
     const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]);
@@ -42,7 +44,17 @@ export class ChemicalConsumptionService {
       const chemicals = archived && historicalChemicals(archived, month);
       if (chemicals) combined.push({ propertyId: property.id, property, month, chemicals, sourceName: 'Skimmer history 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
     }
-    return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
+    const recurring = new Map<string, { propertyId: string; propertyName: string; entries: Array<{ month: string; chemicalName: string; unit: string; quantity: number; threshold: number; excessPercent: number }> }>();
+    for (const period of allPeriods) {
+      const presented = this.present(period, history.get(period.propertyId));
+      for (const chemical of presented.chemicals.filter((item: any) => item.status === 'HIGH' && item.expectedMax != null)) {
+        const item = recurring.get(period.propertyId) || { propertyId: period.propertyId, propertyName: period.property.name, entries: [] };
+        item.entries.push({ month: period.month, chemicalName: chemical.name, unit: chemical.unit, quantity: chemical.quantity, threshold: chemical.expectedMax, excessPercent: chemical.excessPercent ?? 0 });
+        recurring.set(period.propertyId, item);
+      }
+    }
+    const recurringOverconsumption = [...recurring.values()].map((item) => ({ ...item, months: new Set(item.entries.map((entry) => entry.month)).size })).filter((item) => item.months > 1).sort((a, b) => b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
+    return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), recurringOverconsumption, history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
   }
   private present(period: any, history?: HistoryProperty) {
     const chemicals = period.chemicals as ConsumptionChemicalDto[];
