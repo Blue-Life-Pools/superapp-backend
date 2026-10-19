@@ -275,6 +275,7 @@ export class PropertiesService {
               waterBodies: {
                 create: waterBodies.map((waterBody) => ({
                   name: waterBody.name.trim(),
+                  technicianName: waterBody.technicianName?.trim() || null,
                   type: waterBody.type,
                   size: waterBody.size ?? null,
                   gallons: waterBody.gallons ?? null,
@@ -981,6 +982,7 @@ export class PropertiesService {
             data: waterBodies.map((waterBody) => ({
               propertyId: id,
               name: waterBody.name.trim(),
+              technicianName: waterBody.technicianName?.trim() || null,
               type: waterBody.type,
               size: waterBody.size ?? null,
               gallons: waterBody.gallons ?? null,

@@ -144,6 +144,7 @@ model WaterBody {
   id         String  @id @default(uuid())
   propertyId String
   name       String
+  technicianName String?
   type       String
   size       String?
   gallons    Int?

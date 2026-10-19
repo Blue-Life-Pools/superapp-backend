@@ -13,6 +13,10 @@ export class CreateWaterBodyDto {
   @IsString()
   name: string;
 
+  @IsOptional()
+  @IsString()
+  technicianName?: string;
+
   @Transform(({ value }) =>
     typeof value === 'string'
       ? value.trim().toUpperCase()
