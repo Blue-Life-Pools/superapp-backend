@@ -64,6 +64,7 @@ describe('PropertiesService', () => {
         {
           propertyId: 'property-1',
           name: 'Pool',
+          technicianName: null,
           type: 'SWIMMING_POOL',
           size: 'LARGE',
           gallons: 40000,
@@ -72,6 +73,7 @@ describe('PropertiesService', () => {
         {
           propertyId: 'property-1',
           name: 'Fountain',
+          technicianName: null,
           type: 'DECORATIVE_WATER_FEATURE',
           size: null,
           gallons: null,

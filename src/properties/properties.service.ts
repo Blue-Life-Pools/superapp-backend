@@ -830,27 +830,30 @@ export class PropertiesService {
       throw new NotFoundException(`No se encontró la propiedad con id ${id}`);
     }
 
-    const candidateName = propertyData.name ?? existing.name;
-    const candidateAddress = propertyData.addressLine1 ?? existing.addressLine1;
-    const candidateCity = propertyData.city ?? existing.city;
-    const candidateState = propertyData.state ?? existing.state;
-    const candidateZip = propertyData.zipCode ?? existing.zipCode;
-    const peers = await this.prisma.property.findMany({
-      where: { id: { not: id } },
-      select: { name: true, addressLine1: true, city: true, state: true, zipCode: true },
-    });
-    const duplicatePeer = peers.find((property) =>
-      this.normalizePropertyIdentity(property.name) === this.normalizePropertyIdentity(candidateName) ||
-      (Boolean(this.normalizePropertyIdentity(candidateAddress) && this.normalizePropertyIdentity(candidateZip)) &&
-        this.normalizePropertyIdentity(property.addressLine1) === this.normalizePropertyIdentity(candidateAddress) &&
-        this.normalizePropertyIdentity(property.city) === this.normalizePropertyIdentity(candidateCity) &&
-        this.normalizePropertyIdentity(property.state) === this.normalizePropertyIdentity(candidateState) &&
-        this.normalizePropertyIdentity(property.zipCode) === this.normalizePropertyIdentity(candidateZip)),
-    );
-    if (duplicatePeer) {
-      throw new BadRequestException(
-        `A property with this name or address already exists: "${duplicatePeer.name}". Open the existing record instead of creating a duplicate.`,
+    const identityFields = ['name', 'addressLine1', 'city', 'state', 'zipCode'] as const;
+    if (identityFields.some((field) => propertyData[field] !== undefined)) {
+      const candidateName = propertyData.name ?? existing.name;
+      const candidateAddress = propertyData.addressLine1 ?? existing.addressLine1;
+      const candidateCity = propertyData.city ?? existing.city;
+      const candidateState = propertyData.state ?? existing.state;
+      const candidateZip = propertyData.zipCode ?? existing.zipCode;
+      const peers = await this.prisma.property.findMany({
+        where: { id: { not: id }, deletedAt: null },
+        select: { name: true, addressLine1: true, city: true, state: true, zipCode: true },
+      });
+      const duplicatePeer = peers.find((property) =>
+        this.normalizePropertyIdentity(property.name) === this.normalizePropertyIdentity(candidateName) ||
+        (Boolean(this.normalizePropertyIdentity(candidateAddress) && this.normalizePropertyIdentity(candidateZip)) &&
+          this.normalizePropertyIdentity(property.addressLine1) === this.normalizePropertyIdentity(candidateAddress) &&
+          this.normalizePropertyIdentity(property.city) === this.normalizePropertyIdentity(candidateCity) &&
+          this.normalizePropertyIdentity(property.state) === this.normalizePropertyIdentity(candidateState) &&
+          this.normalizePropertyIdentity(property.zipCode) === this.normalizePropertyIdentity(candidateZip)),
       );
+      if (duplicatePeer) {
+        throw new BadRequestException(
+          `A property with this name or address already exists: "${duplicatePeer.name}". Open the existing record instead of creating a duplicate.`,
+        );
+      }
     }
 
     if (contacts === undefined && waterBodies === undefined) {
