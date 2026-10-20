@@ -117,8 +117,12 @@ export class ChemicalsController {
   }
 
   @Get('reports/export')
-  async export(@Res() response: Response) {
-    const csv = await this.chemicalsService.exportCsv();
+  async export(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Res() response: Response,
+  ) {
+    const csv = await this.chemicalsService.exportCsv(from, to);
     const date = new Date().toISOString().slice(0, 10);
     response
       .type('text/csv; charset=utf-8')

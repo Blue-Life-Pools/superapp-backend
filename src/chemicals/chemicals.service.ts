@@ -406,9 +406,12 @@ export class ChemicalsService {
     }
   }
 
-  async exportCsv() {
+  async exportCsv(from?: string, to?: string) {
+    const validDate = (value: string | undefined) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+    if (!validDate(from) || !validDate(to)) throw new BadRequestException('Use valid dates in YYYY-MM-DD format.');
+    if (from && to && from > to) throw new BadRequestException('The start date cannot be after the end date.');
     const reports = await this.prisma.chemicalReport.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...(from || to ? { serviceDate: { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}) } } : {}) },
       orderBy: [{ serviceDate: 'desc' }, { createdAt: 'desc' }],
     });
     const headers = [
