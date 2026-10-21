@@ -5,6 +5,7 @@ import { allocateConsumption, distributeInteger } from './consumption-allocation
 import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
+import { companyConsumptionReport, globalCompanyConsumptionReport } from './consumption-company-report';
 
 const propertySelect = { id: true, name: true, code: true, waterBodies: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -21,6 +22,21 @@ export class ChemicalConsumptionService {
   }
   private validMonth(month: string) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new BadRequestException('Choose a valid month.');
+  }
+  async companyReport(month: string) {
+    const global = month === 'global';
+    if (!global) this.validMonth(month);
+    const active = { deletedAt: null, lifecycleStatus: { not: 'INACTIVE' } };
+    const [properties, periods, archive, available] = await Promise.all([
+      this.prisma.property.findMany({ where: active, select: { id: true, name: true, code: true }, orderBy: { name: 'asc' } }),
+      this.prisma.chemicalConsumptionPeriod.findMany({ where: { ...(global ? {} : { month }), sourceName: { not: null }, property: active }, select: { propertyId: true, month: true, sourceName: true, chemicals: true } }),
+      this.readHistory(),
+      this.prisma.chemicalConsumptionPeriod.findMany({ where: { sourceName: { not: null }, property: active }, select: { month: true }, distinct: ['month'], orderBy: { month: 'desc' } }),
+    ]);
+    const report = global
+      ? globalCompanyConsumptionReport(properties, periods as unknown as Parameters<typeof globalCompanyConsumptionReport>[1], archive)
+      : companyConsumptionReport(month, properties, periods as unknown as Parameters<typeof companyConsumptionReport>[2], archive);
+    return { ...report, availableMonths: available.map((period) => period.month) };
   }
   async list(month: string) {
     this.validMonth(month);
