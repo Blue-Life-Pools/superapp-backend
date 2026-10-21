@@ -188,13 +188,14 @@ describe('company chemical consumption report', () => {
     expect(prisma.chemicalConsumptionPeriod.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sourceName: { not: null }, property: { deletedAt: null, lifecycleStatus: { not: 'INACTIVE' } } }, select: { propertyId: true, month: true, sourceName: true, chemicals: true } }));
   });
 
-  it('uses the four user-supplied monthly company maxima without multiplying by properties or adjusting for season', () => {
+  it('uses the five user-supplied monthly company maxima without multiplying by properties or adjusting for season', () => {
     for (const month of ['2026-02', '2026-07', '2028-02']) {
       const report = companyConsumptionReport(month, [property('a'), property('b')], [
         { propertyId: 'a', sourceName: 'skimmer.pdf', chemicals: [
           { name: 'Cloro en polvo', unit: 'Scoops', quantity: 200 },
           { name: 'Bicarbonato', unit: 'Scoop', quantity: 95 },
-          { name: 'Sal', unit: 'Bags', quantity: 6 },
+          { name: 'Estabilizador', unit: 'Scoops', quantity: 450 },
+          { name: 'Sal', unit: 'Bags', quantity: 14 },
           { name: 'Fosfato', unit: 'oz', quantity: 35 },
         ] },
         { propertyId: 'b', sourceName: 'skimmer.pdf', chemicals: [
@@ -202,7 +203,7 @@ describe('company chemical consumption report', () => {
           { name: 'Phosphates ↓', unit: 'oz', quantity: 45 },
         ] },
       ], []);
-      for (const [id, limit, actual] of [['chlorinepowder:scoop', 190, 200], ['bicarbonate:scoop', 170, 180], ['salt:bag', 5, 6], ['phosphates:oz', 70, 80]] as const) {
+      for (const [id, limit, actual] of [['stabilizer:scoop', 412, 450], ['chlorinepowder:scoop', 190, 200], ['bicarbonate:scoop', 170, 180], ['salt:bag', 13, 14], ['phosphates:oz', 70, 80]] as const) {
         const chemical = report.chemicals.find((entry) => entry.id === id)!;
         expect(chemical).toMatchObject({ maximumSource: 'MANUAL_COMPANY', manualMonthlyMaximum: limit, maximum: limit, comparisonMaximum: limit, recordedQuantity: actual, comparableQuantity: actual, unreferencedQuantity: 0 });
         expect(chemical.percent).toBeCloseTo(actual / limit * 100);
@@ -242,7 +243,8 @@ describe('company chemical consumption report', () => {
     expect(report.months).toEqual(['2026-01', '2026-02', '2027-07']);
     expect(bicarbonate).toMatchObject({ maximum: 510, comparisonMaximum: 510, recordedQuantity: 340, comparableQuantity: 340, maximumSource: 'MANUAL_COMPANY', manualMonthlyMaximum: 170 });
     expect(bicarbonate.percent).toBeCloseTo(340 / 510 * 100);
-    expect(report.chemicals.find((chemical) => chemical.id === 'salt:bag')).toMatchObject({ maximum: 15, recordedQuantity: null, percent: null });
+    expect(report.chemicals.find((chemical) => chemical.id === 'salt:bag')).toMatchObject({ maximum: 39, recordedQuantity: null, percent: null });
+    expect(report.chemicals.find((chemical) => chemical.id === 'stabilizer:scoop')).toMatchObject({ maximum: 1236, recordedQuantity: null, percent: null });
     expect(bicarbonate.properties.every((row) => row.maximum === null && row.comparisonMaximum === null)).toBe(true);
   });
 

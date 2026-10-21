@@ -24,9 +24,10 @@ const catalog = [
 
 // Monthly limits supplied by the user for the whole company, never per property.
 const monthlyCompanyMaximums: Partial<Record<string, number>> = {
+  'stabilizer:scoop': 412,
   'chlorinepowder:scoop': 190,
   'bicarbonate:scoop': 170,
-  'salt:bag': 5,
+  'salt:bag': 13,
   'phosphates:oz': 70,
 };
 
