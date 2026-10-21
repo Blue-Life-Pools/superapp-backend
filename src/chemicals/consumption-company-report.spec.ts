@@ -72,7 +72,7 @@ describe('company chemical consumption report', () => {
     expect(chlorine.recordedQuantity).toBe(30);
     expect(chlorine.comparableQuantity).toBe(20);
     expect(chlorine.comparisonMaximum).toBeCloseTo(31);
-    expect(chlorine.percent).toBeCloseTo(20 / 31 * 100);
+    expect(chlorine.percent).toBeCloseTo(30 / 62 * 100);
     expect(chlorine).toMatchObject({ coverageComplete: false, referenceProperties: 2, reportedReferenceProperties: 1, unreferencedProperties: 1, unreferencedQuantity: 10 });
     expect(chlorine.properties.find((row) => row.propertyId === 'b')!.recordedQuantity).toBeNull();
   });
@@ -83,8 +83,8 @@ describe('company chemical consumption report', () => {
     const report = companyConsumptionReport('2026-01', [property('a'), property('b')], [upload('a', 0), upload('b', 100)], [history('a'), sparse]);
     const chlorine = report.chemicals.find((chemical) => chemical.id === 'liquidchlorine:gal')!;
     expect(chlorine.recordedQuantity).toBe(100);
-    expect(chlorine.excessQuantity).toBe(0);
-    expect(chlorine.percent).toBe(0);
+    expect(chlorine.excessQuantity).toBeCloseTo(69);
+    expect(chlorine.percent).toBeCloseTo(100 / 31 * 100);
     expect(chlorine.comparableQuantity).toBe(0);
     expect(chlorine.properties.find((row) => row.propertyId === 'a')!.recordedQuantity).toBe(0);
     expect(chlorine.properties.find((row) => row.propertyId === 'b')!.maximum).toBeNull();
@@ -144,7 +144,7 @@ describe('company chemical consumption report', () => {
     expect(chlorine.properties[0]).toMatchObject({ referenceMonths: 2, reportedMonths: 2, recordedQuantity: 124 });
   });
 
-  it('excludes missing property-months from the comparable maximum and preserves global partial coverage', () => {
+  it('keeps global percentages aligned with displayed company totals while retaining coverage metadata', () => {
     const report = globalCompanyConsumptionReport([property('a'), property('b')], [
       { ...upload('a', 93), month: '2026-01' },
       { ...upload('b', 28), month: '2026-02' },
@@ -155,7 +155,8 @@ describe('company chemical consumption report', () => {
     expect(chlorine.maximum).toBeCloseTo(118);
     expect(chlorine.comparisonMaximum).toBeCloseTo(59);
     expect(chlorine.comparableQuantity).toBe(121);
-    expect(chlorine.excessQuantity).toBeCloseTo(62);
+    expect(chlorine.excessQuantity).toBeCloseTo(3);
+    expect(chlorine.percent).toBeCloseTo(121 / 118 * 100);
     expect(chlorine.coverageComplete).toBe(false);
     expect(chlorine.referenceProperties).toBe(2);
     expect(chlorine.reportedReferenceProperties).toBe(2);
@@ -185,5 +186,104 @@ describe('company chemical consumption report', () => {
     expect(report.scope).toBe('global');
     expect(report.availableMonths).toEqual(['2026-07', '2026-01']);
     expect(prisma.chemicalConsumptionPeriod.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sourceName: { not: null }, property: { deletedAt: null, lifecycleStatus: { not: 'INACTIVE' } } }, select: { propertyId: true, month: true, sourceName: true, chemicals: true } }));
+  });
+
+  it('uses the four user-supplied monthly company maxima without multiplying by properties or adjusting for season', () => {
+    for (const month of ['2026-02', '2026-07', '2028-02']) {
+      const report = companyConsumptionReport(month, [property('a'), property('b')], [
+        { propertyId: 'a', sourceName: 'skimmer.pdf', chemicals: [
+          { name: 'Cloro en polvo', unit: 'Scoops', quantity: 200 },
+          { name: 'Bicarbonato', unit: 'Scoop', quantity: 95 },
+          { name: 'Sal', unit: 'Bags', quantity: 6 },
+          { name: 'Fosfato', unit: 'oz', quantity: 35 },
+        ] },
+        { propertyId: 'b', sourceName: 'skimmer.pdf', chemicals: [
+          { name: 'Bicarbonate', unit: 'scoop', quantity: 85 },
+          { name: 'Phosphates ↓', unit: 'oz', quantity: 45 },
+        ] },
+      ], []);
+      for (const [id, limit, actual] of [['chlorinepowder:scoop', 190, 200], ['bicarbonate:scoop', 170, 180], ['salt:bag', 5, 6], ['phosphates:oz', 70, 80]] as const) {
+        const chemical = report.chemicals.find((entry) => entry.id === id)!;
+        expect(chemical).toMatchObject({ maximumSource: 'MANUAL_COMPANY', manualMonthlyMaximum: limit, maximum: limit, comparisonMaximum: limit, recordedQuantity: actual, comparableQuantity: actual, unreferencedQuantity: 0 });
+        expect(chemical.percent).toBeCloseTo(actual / limit * 100);
+        expect(chemical.excessQuantity).toBe(actual - limit);
+        expect(chemical.properties.every((row) => row.maximum === null)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps fixed company limits when some history exists, preserving other historical chemical calculations', () => {
+    const report = companyConsumptionReport('2026-01', [property('a')], [{ propertyId: 'a', sourceName: 'skimmer.pdf', chemicals: [
+      { name: 'Bicarbonate', unit: 'scoop', quantity: 200 }, { name: 'Liquid', unit: 'GAL', quantity: 40 },
+    ] }], [history('a', [{ name: 'Bicarbonate', unit: 'scoop' }, { name: 'Liquid Chlorine', unit: 'gal' }])]);
+    expect(report.chemicals.find((chemical) => chemical.id === 'bicarbonate:scoop')).toMatchObject({ maximum: 170, maximumSource: 'MANUAL_COMPANY' });
+    const liquid = report.chemicals.find((chemical) => chemical.id === 'liquidchlorine:gal')!;
+    expect(liquid.maximumSource).toBe('HISTORY_2025');
+    expect(liquid.maximum).toBeCloseTo(31);
+    expect(liquid.excessQuantity).toBeCloseTo(9);
+  });
+
+  it('shows manual maxima without fabricating Skimmer consumption or converting different units', () => {
+    const empty = companyConsumptionReport('2026-01', [property('a')], [], []);
+    expect(empty.chemicals.find((chemical) => chemical.id === 'chlorinepowder:scoop')).toMatchObject({ maximum: 190, recordedQuantity: null, percent: null });
+    const mismatch = companyConsumptionReport('2026-01', [property('a')], [upload('a', 10, 'Bicarbonate', 'bag')], []);
+    expect(mismatch.chemicals.find((chemical) => chemical.id === 'bicarbonate:bag')).toMatchObject({ maximum: null, percent: null, maximumSource: 'HISTORY_2025' });
+    expect(mismatch.chemicals.find((chemical) => chemical.id === 'bicarbonate:scoop')).toMatchObject({ maximum: 170, recordedQuantity: null });
+  });
+
+  it('adds each fixed limit once per uploaded month in Global, including months without use of that chemical', () => {
+    const report = globalCompanyConsumptionReport([property('a'), property('b')], [
+      { ...upload('a', 180, 'Bicarbonate', 'Scoop'), month: '2026-01' },
+      { ...upload('b', 1, 'Liquid', 'GAL'), month: '2026-02' },
+      { ...upload('a', 160, 'Bicarbonate', 'scoop'), month: '2027-07' },
+      { ...upload('a', 999, 'Bicarbonate', 'scoop'), sourceName: null, month: '2026-12' },
+    ], []);
+    const bicarbonate = report.chemicals.find((chemical) => chemical.id === 'bicarbonate:scoop')!;
+    expect(report.months).toEqual(['2026-01', '2026-02', '2027-07']);
+    expect(bicarbonate).toMatchObject({ maximum: 510, comparisonMaximum: 510, recordedQuantity: 340, comparableQuantity: 340, maximumSource: 'MANUAL_COMPANY', manualMonthlyMaximum: 170 });
+    expect(bicarbonate.percent).toBeCloseTo(340 / 510 * 100);
+    expect(report.chemicals.find((chemical) => chemical.id === 'salt:bag')).toMatchObject({ maximum: 15, recordedQuantity: null, percent: null });
+    expect(bicarbonate.properties.every((row) => row.maximum === null && row.comparisonMaximum === null)).toBe(true);
+  });
+
+  it('regresses the January acid case: 685.25 / 643.667 is 106.5%, never the subset percentage of 74.3%', () => {
+    const archive = [
+      history('a', [{ name: 'Muriatic Acid', unit: 'gal' }], 599.3778879406699 / 31),
+      history('b', [{ name: 'Muriatic Acid', unit: 'gal' }], (643.6674910612855 - 599.3778879406699) / 31),
+    ];
+    const report = companyConsumptionReport('2026-01', [property('a'), property('b'), property('c')], [
+      upload('a', 445.5, 'Muriatic', 'GAL'), upload('c', 239.75, 'Muriatic', 'GAL'),
+    ], archive);
+    const acid = report.chemicals.find((chemical) => chemical.id === 'muriaticacid:gal')!;
+    expect(acid.recordedQuantity).toBe(685.25);
+    expect(acid.maximum).toBeCloseTo(643.6674910612855);
+    expect(acid.percent!.toFixed(1)).toBe('106.5');
+    expect(acid.excessQuantity).toBeCloseTo(41.5825089387145);
+    expect(acid.comparableQuantity! / acid.comparisonMaximum! * 100).toBeCloseTo(74.32706627377257);
+  });
+
+  it('uses the displayed numerator and denominator for every chemical in monthly and global reports', () => {
+    const periods = [
+      { propertyId: 'a', month: '2026-01', sourceName: 'one.pdf', chemicals: [
+        { name: 'Muriatic', unit: 'Gal', quantity: 90 }, { name: 'Liquid', unit: 'GAL', quantity: 5 },
+        { name: 'Bicarbonate', unit: 'Scoop', quantity: 185 }, { name: 'Salt', unit: 'bag', quantity: 6 },
+      ] },
+      { propertyId: 'b', month: '2026-02', sourceName: 'two.pdf', chemicals: [
+        { name: 'Muriatic Acid', unit: 'gal', quantity: 90 }, { name: 'Phosphates', unit: 'oz', quantity: 80 },
+      ] },
+    ];
+    const properties = [property('a'), property('b')];
+    const archive = [history('a', [{ name: 'Muriatic Acid', unit: 'gal' }, { name: 'Liquid Chlorine', unit: 'gal' }])];
+    const reports = [companyConsumptionReport('2026-01', properties, periods.filter((row) => row.month === '2026-01'), archive), globalCompanyConsumptionReport(properties, periods, archive)];
+    for (const report of reports) for (const chemical of report.chemicals) {
+      if (chemical.recordedQuantity === null || chemical.maximum === null) {
+        expect(chemical.percent).toBeNull();
+      } else {
+        expect(chemical.percent).toBeCloseTo(chemical.recordedQuantity / chemical.maximum * 100);
+        expect(chemical.excessQuantity).toBeCloseTo(Math.max(0, chemical.recordedQuantity - chemical.maximum));
+        expect(chemical.remainingQuantity).toBeCloseTo(Math.max(0, chemical.maximum - chemical.recordedQuantity));
+        if (chemical.recordedQuantity > chemical.maximum) expect(chemical.percent).toBeGreaterThan(100);
+      }
+    }
   });
 });
