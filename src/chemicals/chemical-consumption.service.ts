@@ -5,7 +5,7 @@ import { allocateConsumption, distributeInteger } from './consumption-allocation
 import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
-import { companyConsumptionReport, globalCompanyConsumptionReport } from './consumption-company-report';
+import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
 
 const propertySelect = { id: true, name: true, code: true, waterBodies: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -34,8 +34,8 @@ export class ChemicalConsumptionService {
       this.prisma.chemicalConsumptionPeriod.findMany({ where: { sourceName: { not: null }, property: active }, select: { month: true }, distinct: ['month'], orderBy: { month: 'desc' } }),
     ]);
     const report = global
-      ? globalCompanyConsumptionReport(properties, periods as unknown as Parameters<typeof globalCompanyConsumptionReport>[1], archive)
-      : companyConsumptionReport(month, properties, periods as unknown as Parameters<typeof companyConsumptionReport>[2], archive);
+      ? globalCompanyConsumptionReport(properties, periods as unknown as Parameters<typeof globalCompanyConsumptionReport>[1], archive, { basePropertyCount: companyMaximumBaseProperties })
+      : companyConsumptionReport(month, properties, periods as unknown as Parameters<typeof companyConsumptionReport>[2], archive, { basePropertyCount: companyMaximumBaseProperties });
     return { ...report, availableMonths: available.map((period) => period.month) };
   }
   async list(month: string) {

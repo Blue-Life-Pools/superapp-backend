@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { ChemicalConsumptionService } from './chemical-consumption.service';
-import { companyConsumptionReport, globalCompanyConsumptionReport } from './consumption-company-report';
+import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
 import type { HistoryProperty } from './consumption-history.types';
 
 const property = (id: string) => ({ id, name: `Property ${id}`, code: id });
@@ -122,6 +122,8 @@ describe('company chemical consumption report', () => {
     expect(prisma.chemicalConsumptionPeriod.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { month: '2026-01', sourceName: { not: null }, property: active } }));
     expect(result.thresholds).toEqual({ warning: 80, attention: 90, maximum: 100 });
     expect(result.availableMonths).toEqual(['2026-01']);
+    expect(result.basePropertyCount).toBe(253);
+    expect(result.chemicals.find((chemical) => chemical.id === 'stabilizer:scoop')!.maximum).toBeCloseTo(412 / 253);
     await expect(service.companyReport('2026-13')).rejects.toThrow(BadRequestException);
   });
 
@@ -287,5 +289,92 @@ describe('company chemical consumption report', () => {
         if (chemical.recordedQuantity > chemical.maximum) expect(chemical.percent).toBeGreaterThan(100);
       }
     }
+  });
+
+  describe('automatic population adjustment from the 253-property 2025 base', () => {
+    const population = { basePropertyCount: companyMaximumBaseProperties };
+    const properties = Array.from({ length: 275 }, (_, index) => property(String(index)));
+    const uploads = (count: number) => properties.slice(0, count).map((entry) => upload(entry.id, 1));
+
+    it('preserves the base at 253 and adjusts every manual maximum once at 275', () => {
+      expect(companyMaximumBaseProperties).toBe(253);
+      for (const count of [253, 275]) {
+        const report = companyConsumptionReport('2026-07', properties, uploads(count), [], population);
+        expect(report.uploadedProperties).toBe(count);
+        expect(report.basePropertyCount).toBe(253);
+        expect(report.monthlyPropertyCounts).toEqual([{ month: '2026-07', properties: count }]);
+        for (const [id, base] of [['stabilizer:scoop', 412], ['salt:bag', 13], ['chlorinepowder:scoop', 190], ['bicarbonate:scoop', 170], ['phosphates:oz', 70]] as const) {
+          const chemical = report.chemicals.find((item) => item.id === id)!;
+          expect(chemical).toMatchObject({ baseMaximum: base, manualMonthlyMaximum: base, populationAdjusted: true });
+          expect(chemical.maximum).toBeCloseTo(base * count / 253);
+          expect(chemical.updatedMaximum).toBe(chemical.maximum);
+          expect(chemical.adjustmentFactor).toBeCloseTo(count / 253);
+        }
+      }
+    });
+
+    it('uses unique uploaded properties, not chemical lines, fee-only records or unknown properties', () => {
+      const report = companyConsumptionReport('2026-01', properties, [
+        ...uploads(253), upload('0', 50, 'Salt', 'bag'),
+        upload('unknown', 1000), { ...upload('253', 0), sourceName: null },
+      ], [], population);
+      expect(report.uploadedProperties).toBe(253);
+      expect(report.chemicals.find((item) => item.id === 'salt:bag')).toMatchObject({ maximum: 13, recordedQuantity: 50, percent: 50 / 13 * 100 });
+    });
+
+    it('adjusts historical totals too while preserving original per-property references', () => {
+      const archive = [history('0')];
+      const report = companyConsumptionReport('2026-01', properties, uploads(275), archive, population);
+      const chlorine = report.chemicals.find((item) => item.id === 'liquidchlorine:gal')!;
+      expect(chlorine.baseMaximum).toBeCloseTo(31);
+      expect(chlorine.maximum).toBeCloseTo(31 * 275 / 253);
+      expect(chlorine.properties.find((item) => item.propertyId === '0')!.maximum).toBeCloseTo(31);
+      expect(chlorine.percent).toBeCloseTo(275 / chlorine.maximum! * 100);
+      expect(chlorine.excessQuantity).toBeCloseTo(275 - chlorine.maximum!);
+    });
+
+    it('sums independently adjusted months in Global instead of using its distinct property count', () => {
+      const report = globalCompanyConsumptionReport(properties, [
+        ...uploads(253).map((entry) => ({ ...entry, month: '2026-01' })),
+        ...uploads(275).map((entry) => ({ ...entry, month: '2026-02' })),
+      ], [], population);
+      expect(report.uploadedProperties).toBe(275);
+      expect(report.monthlyPropertyCounts).toEqual([{ month: '2026-01', properties: 253 }, { month: '2026-02', properties: 275 }]);
+      for (const [id, base] of [['stabilizer:scoop', 412], ['salt:bag', 13]] as const) {
+        const chemical = report.chemicals.find((entry) => entry.id === id)!;
+        expect(chemical.baseMaximum).toBe(base * 2);
+        expect(chemical.maximum).toBeCloseTo(base + base * 275 / 253);
+        expect(chemical.updatedMaximum).toBe(chemical.maximum);
+      }
+      const chlorine = report.chemicals.find((entry) => entry.id === 'liquidchlorine:gal')!;
+      expect(chlorine.recordedQuantity).toBe(528);
+      expect(chlorine.maximum).toBeNull();
+    });
+
+    it('does not grow past months just because new unreferenced properties are created', () => {
+      const existing = companyConsumptionReport('2026-01', properties.slice(0, 253), uploads(253), [history('0')], population);
+      const later = companyConsumptionReport('2026-01', properties, uploads(253), [history('0')], population);
+      for (const chemical of later.chemicals) {
+        const before = existing.chemicals.find((entry) => entry.id === chemical.id)!;
+        expect(chemical.maximum).toBe(before.maximum);
+        expect(chemical.baseMaximum).toBe(before.baseMaximum);
+        expect(chemical.recordedQuantity).toBe(before.recordedQuantity);
+      }
+    });
+
+    it('keeps missing monthly and global data unknown instead of inventing zero usage or an allowance', () => {
+      const monthly = companyConsumptionReport('2026-01', properties, [], [], population);
+      const stabilizer = monthly.chemicals.find((entry) => entry.id === 'stabilizer:scoop')!;
+      expect(stabilizer).toMatchObject({ baseMaximum: 412, updatedMaximum: null, maximum: null, adjustmentFactor: null, recordedQuantity: null, percent: null });
+      const global = globalCompanyConsumptionReport(properties, [], [], population);
+      expect(global.monthlyPropertyCounts).toEqual([]);
+      expect(global.chemicals.every((entry) => entry.maximum === null && entry.updatedMaximum === null && entry.recordedQuantity === null)).toBe(true);
+    });
+
+    it('rejects invalid population bases', () => {
+      for (const basePropertyCount of [0, -1, 1.5, NaN, Infinity]) {
+        expect(() => companyConsumptionReport('2026-01', properties, [], [], { basePropertyCount })).toThrow('positive integer');
+      }
+    });
   });
 });
