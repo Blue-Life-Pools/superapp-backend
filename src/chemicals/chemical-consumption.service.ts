@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { allocateConsumption, distributeInteger } from './consumption-allocation';
-import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
 import type { AuthenticatedUser } from '../auth/auth.service';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
@@ -101,6 +101,14 @@ export class ChemicalConsumptionService {
       await transaction.property.update({ where: { id: propertyId }, data: { chemicalFollowUpResolvedAt: now, chemicalFollowUpResolvedById: user?.id || null, chemicalFollowUpResolution: solution } });
       return transaction.chemicalFollowUpComment.create({ data: { propertyId, authorId: user?.id || null, authorName: user?.name || 'Unknown user', body: solution, tags: ['solved'], occurredAt: now } });
     });
+  }
+
+  async updateFollowUp(propertyId: string, commentId: string, data: UpdateChemicalFollowUpCommentDto) {
+    const current = await this.prisma.chemicalFollowUpComment.findFirstOrThrow({ where: { id: commentId, propertyId } });
+    const body = data.body === undefined ? current.body : data.body.trim();
+    if (!body) throw new BadRequestException('Write a follow-up comment.');
+    const tags = data.tags === undefined ? current.tags : [...new Set(data.tags.map((tag) => tag.trim().replace(/^@/, '')).filter(Boolean))];
+    return this.prisma.chemicalFollowUpComment.update({ where: { id: commentId }, data: { body, tags, occurredAt: data.occurredAt ? new Date(`${data.occurredAt}T12:00:00`) : undefined } });
   }
   private present(period: any, history?: HistoryProperty) {
     const chemicals = period.chemicals as ConsumptionChemicalDto[];

@@ -45,6 +45,12 @@ export class CreateChemicalFollowUpCommentDto {
   @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) occurredAt?: string;
 }
 
+export class UpdateChemicalFollowUpCommentDto {
+  @IsOptional() @IsString() @MaxLength(10000) body?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) occurredAt?: string;
+}
+
 export class SolveChemicalFollowUpDto {
   @IsString() @MaxLength(10000) solution!: string;
 }

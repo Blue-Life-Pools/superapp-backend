@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/c
 import { Roles } from '../auth/auth.decorators';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { ChemicalConsumptionService } from './chemical-consumption.service';
-import { ConsumptionImportDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { ConsumptionImportDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
 
 @Controller('chemicals/consumption')
 @Roles('CHEMICALS')
@@ -19,4 +19,5 @@ export class ChemicalConsumptionController {
   @Get(':propertyId/follow-up') followUp(@Param('propertyId') id: string) { return this.service.listFollowUp(id); }
   @Post(':propertyId/follow-up') createFollowUp(@Param('propertyId') id: string, @Body() data: CreateChemicalFollowUpCommentDto, @Req() request: AuthenticatedRequest) { return this.service.createFollowUp(id, data, request.appUser); }
   @Post(':propertyId/follow-up/solve') solveFollowUp(@Param('propertyId') id: string, @Body() data: SolveChemicalFollowUpDto, @Req() request: AuthenticatedRequest) { return this.service.solveFollowUp(id, data, request.appUser); }
+  @Patch(':propertyId/follow-up/:commentId') updateFollowUp(@Param('propertyId') id: string, @Param('commentId') commentId: string, @Body() data: UpdateChemicalFollowUpCommentDto) { return this.service.updateFollowUp(id, commentId, data); }
 }
