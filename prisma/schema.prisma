@@ -57,6 +57,10 @@ model Property {
   quickbooksEstimates    QuickBooksEstimate[]
   chemicalConsumptionPeriods ChemicalConsumptionPeriod[]
   chemicalFollowUpComments ChemicalFollowUpComment[]
+  chemicalFollowUpResolvedAt DateTime?
+  chemicalFollowUpResolvedById String?
+  chemicalFollowUpResolution String?
+  chemicalFollowUpResolvedBy AppUser? @relation("ChemicalFollowUpResolvers", fields: [chemicalFollowUpResolvedById], references: [id], onDelete: SetNull)
 
   @@index([lifecycleStatus])
 }
@@ -319,6 +323,7 @@ model AppUser {
   active       Boolean      @default(true)
   sessions     AppSession[]
   chemicalFollowUpComments ChemicalFollowUpComment[]
+  chemicalFollowUpResolutions Property[] @relation("ChemicalFollowUpResolvers")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

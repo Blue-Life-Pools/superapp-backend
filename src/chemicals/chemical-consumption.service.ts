@@ -2,13 +2,13 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { allocateConsumption, distributeInteger } from './consumption-allocation';
-import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
 import type { AuthenticatedUser } from '../auth/auth.service';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
 import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
 
-const propertySelect = { id: true, name: true, code: true, waterBodies: true } as const;
+const propertySelect = { id: true, name: true, code: true, waterBodies: true, chemicalFollowUpResolvedAt: true, chemicalFollowUpResolution: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 @Injectable()
 export class ChemicalConsumptionService {
@@ -71,7 +71,8 @@ export class ChemicalConsumptionService {
         recurring.set(period.propertyId, item);
       }
     }
-    const recurringOverconsumption = [...recurring.values()].map((item) => ({ ...item, months: new Set(item.entries.map((entry) => entry.month)).size })).filter((item) => item.months > 1).sort((a, b) => b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
+    const resolved = Object.fromEntries(properties.map((property) => [property.id, Boolean(property.chemicalFollowUpResolvedAt)]));
+    const recurringOverconsumption = [...recurring.values()].map((item) => ({ ...item, months: new Set(item.entries.map((entry) => entry.month)).size, resolved: resolved[item.propertyId] || false })).filter((item) => item.months > 1).sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
     const followUpModel = (this.prisma as any).chemicalFollowUpComment;
     const followUps = followUpModel?.groupBy ? await followUpModel.groupBy({ by: ['propertyId'], _count: { _all: true } }) : [];
     const followUpCounts = Object.fromEntries(followUps.map((item) => [item.propertyId, item._count._all]));
@@ -89,6 +90,17 @@ export class ChemicalConsumptionService {
     if (!body) throw new BadRequestException('Write a follow-up comment.');
     const tags = [...new Set((data.tags || []).map((tag) => tag.trim().replace(/^@/, '')).filter(Boolean))];
     return this.prisma.chemicalFollowUpComment.create({ data: { propertyId, authorId: user?.id || null, authorName: user?.name || 'Unknown user', body, tags, occurredAt: data.occurredAt ? new Date(`${data.occurredAt}T12:00:00`) : undefined } });
+  }
+
+  async solveFollowUp(propertyId: string, data: SolveChemicalFollowUpDto, user?: AuthenticatedUser) {
+    const solution = data.solution.trim();
+    if (!solution) throw new BadRequestException('Write the solution before marking this property as solved.');
+    await this.prisma.property.findUniqueOrThrow({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    const now = new Date();
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.property.update({ where: { id: propertyId }, data: { chemicalFollowUpResolvedAt: now, chemicalFollowUpResolvedById: user?.id || null, chemicalFollowUpResolution: solution } });
+      return transaction.chemicalFollowUpComment.create({ data: { propertyId, authorId: user?.id || null, authorName: user?.name || 'Unknown user', body: solution, tags: ['solved'], occurredAt: now } });
+    });
   }
   private present(period: any, history?: HistoryProperty) {
     const chemicals = period.chemicals as ConsumptionChemicalDto[];
