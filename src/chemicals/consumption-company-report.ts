@@ -11,6 +11,8 @@ export const companyMaximumBaseProperties = 253;
 type PropertyTotal = {
   propertyId: string; propertyName: string; recordedQuantity: number | null;
   expectedQuantity: number | null; maximum: number | null;
+  referenceMaximum: number | null;
+  maximumSource: 'HISTORY_2025' | 'WORKBOOK_PROPERTY' | null;
 };
 
 const catalog = [
@@ -48,7 +50,6 @@ export function companyConsumptionReport(month: string, properties: Property[], 
   if (population && (!Number.isInteger(population.basePropertyCount) || population.basePropertyCount <= 0)) throw new Error('The property population base must be a positive integer.');
   const matched = matchConsumptionHistory(properties, archive);
   const supplied = matchConsumptionMaximums(properties, maximums);
-  const suppliedProducts = new Set(maximums.map((row) => `${productKey(row.chemicalName)}:${unitKey(row.unit)}`));
   const uploaded = new Map(periods.filter((period) => period.sourceName).map((period) => [period.propertyId, period]));
   const uploadedProperties = properties.filter((property) => uploaded.has(property.id)).length;
   const adjustmentFactor = population ? uploadedProperties > 0 ? uploadedProperties / population.basePropertyCount : null : 1;
@@ -77,26 +78,21 @@ export function companyConsumptionReport(month: string, properties: Property[], 
       if (!target.rows.has(property.id)) target.rows.set(property.id, {
         propertyId: property.id, propertyName: property.name,
         recordedQuantity: period ? 0 : null, expectedQuantity: null, maximum: null,
+        referenceMaximum: null, maximumSource: null,
       });
       return target.rows.get(property.id)!;
     };
 
     for (const chemical of history?.chemicals || []) {
-      if (suppliedProducts.has(`${productKey(chemical.name)}:${unitKey(chemical.unit)}`)) continue;
       if (monthlyCompanyMaximums[`${productKey(chemical.name)}:${unitKey(chemical.unit)}`] !== undefined) continue;
       const range = historicalRange(history, chemical.name, chemical.unit, month);
       if (!range) continue;
       const row = rowFor(group(chemical.name, chemical.unit));
       // An alias in the archive must not allocate a property's maximum twice.
       row.maximum = Math.max(row.maximum ?? 0, range.expectedMax);
+      row.referenceMaximum = row.maximum;
+      row.maximumSource = 'HISTORY_2025';
       row.expectedQuantity = Math.max(row.expectedQuantity ?? 0, range.expectedQuantity);
-    }
-
-    // The workbook already includes 2025-2026 data and new properties. Sum only
-    // the unique properties in this month's uploaded report; do not scale again.
-    if (period) for (const maximum of supplied.get(property.id) || []) {
-      const row = rowFor(group(maximum.chemicalName, maximum.unit));
-      row.maximum = Math.max(row.maximum ?? 0, maximum.maximum);
     }
 
     for (const chemical of period?.chemicals || []) {
@@ -113,13 +109,12 @@ export function companyConsumptionReport(month: string, properties: Property[], 
   }
 
   const chemicals = [...groups.values()].map((target) => {
-    const workbook = suppliedProducts.has(target.id);
-    const manualMonthlyMaximum = workbook ? null : monthlyCompanyMaximums[target.id] ?? null;
+    const manualMonthlyMaximum = monthlyCompanyMaximums[target.id] ?? null;
     const manual = manualMonthlyMaximum !== null;
     const rows = [...target.rows.values()].sort((a, b) => a.propertyName.localeCompare(b.propertyName));
     const referenced = rows.filter((row) => row.maximum !== null);
     const baseMaximum = manualMonthlyMaximum ?? (referenced.length ? referenced.reduce((sum, row) => sum + row.maximum!, 0) : null);
-    const maximum = workbook ? baseMaximum : baseMaximum !== null && adjustmentFactor !== null ? baseMaximum * adjustmentFactor : null;
+    const maximum = baseMaximum !== null && adjustmentFactor !== null ? baseMaximum * adjustmentFactor : null;
     const recordedQuantity = target.hasRecordedProduct ? rows.reduce((sum, row) => sum + (row.recordedQuantity ?? 0), 0) : null;
     const unreferenced = manual ? [] : rows.filter((row) => row.maximum === null && row.recordedQuantity !== null);
     const unreferencedQuantity = unreferenced.reduce((sum, row) => sum + (row.recordedQuantity ?? 0), 0);
@@ -129,17 +124,24 @@ export function companyConsumptionReport(month: string, properties: Property[], 
     const comparableQuantity = manual ? recordedQuantity : comparable.length && recordedQuantity !== null ? comparable.reduce((sum, row) => sum + row.recordedQuantity!, 0) : null;
     const comparisonMaximum = manual ? maximum : comparable.length ? comparable.reduce((sum, row) => sum + row.maximum!, 0) : null;
     const coverageComplete = referenceProperties > 0 && reportedReferenceProperties === referenceProperties && unreferencedQuantity === 0;
+    // Workbook values affect ONLY the property table's Maximum/Excess columns.
+    // All company totals, coverage and alert metrics above retain their original
+    // historical/manual references and the existing population adjustment.
+    const displayRows = rows.map((row) => {
+      const suppliedRows = (supplied.get(row.propertyId) || []).filter((entry) => `${productKey(entry.chemicalName)}:${unitKey(entry.unit)}` === target.id);
+      return suppliedRows.length ? { ...row, maximum: Math.max(...suppliedRows.map((entry) => entry.maximum)), maximumSource: 'WORKBOOK_PROPERTY' as const } : row;
+    });
     return {
       id: target.id, name: target.name, unit: target.unit, recordedQuantity, maximum,
-      baseMaximum, updatedMaximum: maximum, populationAdjusted: !workbook && Boolean(population), adjustmentFactor: !workbook && population ? adjustmentFactor : null,
+      baseMaximum, updatedMaximum: maximum, populationAdjusted: Boolean(population), adjustmentFactor: population ? adjustmentFactor : null,
       comparableQuantity, comparisonMaximum,
-      maximumSource: workbook ? 'WORKBOOK_PROPERTY' as const : manual ? 'MANUAL_COMPANY' as const : 'HISTORY_2025' as const,
+      maximumSource: manual ? 'MANUAL_COMPANY' as const : 'HISTORY_2025' as const,
       manualMonthlyMaximum,
-      expectedQuantity: workbook ? null : referenced.length ? referenced.reduce((sum, row) => sum + row.expectedQuantity!, 0) : null,
+      expectedQuantity: referenced.length ? referenced.reduce((sum, row) => sum + row.expectedQuantity!, 0) : null,
       ...companyUsageMetrics(recordedQuantity, maximum),
       referenceProperties, reportedReferenceProperties,
       unreferencedProperties: unreferenced.length, unreferencedQuantity, coverageComplete,
-      georkyRefillQuantity: target.georkyRefillQuantity, properties: rows,
+      georkyRefillQuantity: target.georkyRefillQuantity, properties: displayRows,
     };
   });
 
@@ -194,22 +196,24 @@ export function globalCompanyConsumptionReport(properties: Property[], periods: 
 
     for (const row of chemical.properties) {
       if (!target.rows.has(row.propertyId)) target.rows.set(row.propertyId, {
-        ...row, recordedQuantity: null, maximum: null, expectedQuantity: null,
+        ...row, recordedQuantity: null, maximum: null, referenceMaximum: null, expectedQuantity: null,
         comparableQuantity: null, comparisonMaximum: null, referenceMonths: 0, reportedMonths: 0,
       });
       const combined = target.rows.get(row.propertyId)!;
       combined.recordedQuantity = sum(combined.recordedQuantity, row.recordedQuantity);
       combined.maximum = sum(combined.maximum, row.maximum);
+      combined.referenceMaximum = sum(combined.referenceMaximum, row.referenceMaximum);
+      if (row.maximumSource === 'WORKBOOK_PROPERTY') combined.maximumSource = 'WORKBOOK_PROPERTY';
       combined.expectedQuantity = sum(combined.expectedQuantity, row.expectedQuantity);
       if (chemical.maximumSource === 'MANUAL_COMPANY') {
         if (row.recordedQuantity !== null) target.reported.add(row.propertyId);
-      } else if (row.maximum !== null) {
+      } else if (row.referenceMaximum !== null) {
         target.references.add(row.propertyId);
         combined.referenceMonths += 1;
         if (row.recordedQuantity !== null) {
           target.reported.add(row.propertyId);
           combined.comparableQuantity = sum(combined.comparableQuantity, row.recordedQuantity);
-          combined.comparisonMaximum = sum(combined.comparisonMaximum, row.maximum);
+          combined.comparisonMaximum = sum(combined.comparisonMaximum, row.referenceMaximum);
         }
       } else if (row.recordedQuantity !== null) target.unreferenced.add(row.propertyId);
       if (row.recordedQuantity !== null) combined.reportedMonths += 1;
