@@ -38,3 +38,9 @@ export class UpdateConsumptionPeriodDto {
   @IsNumber() @Min(0.1) @Max(5) seasonFactor!: number;
   @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ConsumptionReferenceDto) references!: ConsumptionReferenceDto[];
 }
+
+export class CreateChemicalFollowUpCommentDto {
+  @IsString() @MaxLength(10000) body!: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) occurredAt?: string;
+}

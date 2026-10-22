@@ -56,6 +56,7 @@ model Property {
   deletedAt              DateTime?
   quickbooksEstimates    QuickBooksEstimate[]
   chemicalConsumptionPeriods ChemicalConsumptionPeriod[]
+  chemicalFollowUpComments ChemicalFollowUpComment[]
 
   @@index([lifecycleStatus])
 }
@@ -317,6 +318,7 @@ model AppUser {
   role         String
   active       Boolean      @default(true)
   sessions     AppSession[]
+  chemicalFollowUpComments ChemicalFollowUpComment[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -332,6 +334,22 @@ model AppSession {
   createdAt DateTime @default(now())
 
   @@index([userId, expiresAt])
+}
+
+model ChemicalFollowUpComment {
+  id         String   @id @default(uuid())
+  propertyId String
+  authorId   String?
+  authorName String
+  body       String
+  tags       String[] @default([])
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  author   AppUser? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, occurredAt])
 }
 
 model SalesActivity {

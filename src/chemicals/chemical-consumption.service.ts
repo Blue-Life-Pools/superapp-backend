@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { allocateConsumption, distributeInteger } from './consumption-allocation';
-import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import type { AuthenticatedUser } from '../auth/auth.service';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
 import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
@@ -71,7 +72,23 @@ export class ChemicalConsumptionService {
       }
     }
     const recurringOverconsumption = [...recurring.values()].map((item) => ({ ...item, months: new Set(item.entries.map((entry) => entry.month)).size })).filter((item) => item.months > 1).sort((a, b) => b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
-    return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), recurringOverconsumption, history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
+    const followUpModel = (this.prisma as any).chemicalFollowUpComment;
+    const followUps = followUpModel?.groupBy ? await followUpModel.groupBy({ by: ['propertyId'], _count: { _all: true } }) : [];
+    const followUpCounts = Object.fromEntries(followUps.map((item) => [item.propertyId, item._count._all]));
+    return { properties, periods: combined.map((period) => this.present(period, history.get(period.propertyId))), recurringOverconsumption: recurringOverconsumption.map((item) => ({ ...item, followUpCount: followUpCounts[item.propertyId] || 0 })), followUpCounts, history: { year: 2025, matchedProperties: history.size, unmatchedProperties: properties.length - history.size, preliminary: true } };
+  }
+
+  async listFollowUp(propertyId: string) {
+    await this.prisma.property.findUniqueOrThrow({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    return this.prisma.chemicalFollowUpComment.findMany({ where: { propertyId }, orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }] });
+  }
+
+  async createFollowUp(propertyId: string, data: CreateChemicalFollowUpCommentDto, user?: AuthenticatedUser) {
+    await this.prisma.property.findUniqueOrThrow({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    const body = data.body.trim();
+    if (!body) throw new BadRequestException('Write a follow-up comment.');
+    const tags = [...new Set((data.tags || []).map((tag) => tag.trim().replace(/^@/, '')).filter(Boolean))];
+    return this.prisma.chemicalFollowUpComment.create({ data: { propertyId, authorId: user?.id || null, authorName: user?.name || 'Unknown user', body, tags, occurredAt: data.occurredAt ? new Date(`${data.occurredAt}T12:00:00`) : undefined } });
   }
   private present(period: any, history?: HistoryProperty) {
     const chemicals = period.chemicals as ConsumptionChemicalDto[];
