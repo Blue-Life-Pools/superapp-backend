@@ -71,8 +71,12 @@ export class ChemicalConsumptionService {
         recurring.set(period.propertyId, item);
       }
     }
-    const resolved = Object.fromEntries(properties.map((property) => [property.id, Boolean(property.chemicalFollowUpResolvedAt)]));
-    const recurringOverconsumption = [...recurring.values()].map((item) => ({ ...item, months: new Set(item.entries.map((entry) => entry.month)).size, resolved: resolved[item.propertyId] || false })).filter((item) => item.months > 1).sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
+    const resolvedAt = Object.fromEntries(properties.map((property) => [property.id, property.chemicalFollowUpResolvedAt]));
+    const recurringOverconsumption = [...recurring.values()].map((item) => {
+      const resolutionDate = resolvedAt[item.propertyId];
+      const resolved = Boolean(resolutionDate) && !item.entries.some((entry) => entry.month > resolutionDate!.toISOString().slice(0, 7));
+      return { ...item, months: new Set(item.entries.map((entry) => entry.month)).size, resolved };
+    }).filter((item) => item.months > 1).sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.months - a.months || b.entries.length - a.entries.length || a.propertyName.localeCompare(b.propertyName));
     const followUpModel = (this.prisma as any).chemicalFollowUpComment;
     const followUps = followUpModel?.groupBy ? await followUpModel.groupBy({ by: ['propertyId'], _count: { _all: true } }) : [];
     const followUpCounts = Object.fromEntries(followUps.map((item) => [item.propertyId, item._count._all]));
