@@ -114,6 +114,7 @@ describe('company chemical consumption report', () => {
       property: { findMany: jest.fn().mockResolvedValue([property('a')]) },
       chemicalConsumptionPeriod: { findMany: jest.fn().mockImplementation((args) => Promise.resolve(args.distinct ? [{ month: '2026-01' }] : [{ ...upload('a', 40), month: '2026-01' }])) },
       chemicalConsumptionHistory: { findMany: jest.fn().mockResolvedValue([history('a')]) },
+      chemicalConsumptionMaximum: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = new ChemicalConsumptionService(prisma as never);
     const result = await service.companyReport('2026-01');
@@ -183,6 +184,7 @@ describe('company chemical consumption report', () => {
         { ...upload('a', 31), month: '2026-01' }, { ...upload('a', 31), month: '2026-07' },
       ])) },
       chemicalConsumptionHistory: { findMany: jest.fn().mockResolvedValue([history('a')]) },
+      chemicalConsumptionMaximum: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const report = await new ChemicalConsumptionService(prisma as never).companyReport('global');
     expect(report.scope).toBe('global');

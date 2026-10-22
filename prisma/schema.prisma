@@ -212,6 +212,21 @@ model ChemicalConsumptionHistory {
   @@unique([sourceYear, code])
 }
 
+model ChemicalConsumptionMaximum {
+  id             String   @id @default(uuid())
+  propertyCode   String
+  propertyName   String
+  chemicalName   String
+  unit           String
+  maximum        Float
+  recordedMonths Int
+  excludedMonths Int
+  sourceName     String
+  updatedAt      DateTime @updatedAt
+
+  @@unique([propertyCode, chemicalName, unit])
+}
+
 model ChemicalConsumptionPeriod {
   id String @id @default(uuid())
   propertyId String

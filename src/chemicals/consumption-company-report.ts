@@ -1,5 +1,7 @@
-import { historicalRange, historyKey, matchConsumptionHistory } from './consumption-history';
+import { historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
+import { productKey, unitKey } from './consumption-products';
+import { matchConsumptionMaximums, type ConsumptionMaximum } from './consumption-maximums';
 
 type Property = { id: string; name: string; code: string | null };
 type Chemical = { name: string; unit: string; quantity: number; technicians?: Array<{ name: string; quantity: number }> };
@@ -33,28 +35,6 @@ const monthlyCompanyMaximums: Partial<Record<string, number>> = {
   'phosphates:oz': 70,
 };
 
-function productKey(name: string) {
-  const key = historyKey(name);
-  const aliases: Record<string, string> = {
-    liquid: 'liquidchlorine', cloroliquido: 'liquidchlorine',
-    muriatic: 'muriaticacid', acidomuriatico: 'muriaticacid',
-    tablets: 'tabs', chlorinetablets: 'tabs', cloroentabletas: 'tabs',
-    estabilizador: 'stabilizer', defilter: 'defilterpowder', depowder: 'defilterpowder',
-    cloroenpolvo: 'chlorinepowder', bicarbonato: 'bicarbonate', sal: 'salt',
-    fosfato: 'phosphates', fosfatos: 'phosphates', phosphate: 'phosphates',
-  };
-  return aliases[key] || key;
-}
-
-function unitKey(unit: string) {
-  const key = unit.trim().toLowerCase();
-  const aliases: Record<string, string> = {
-    gallon: 'gal', gallons: 'gal', gals: 'gal', bags: 'bag', scoops: 'scoop',
-    units: 'qty', unit: 'qty', quantity: 'qty', ounces: 'oz', ounce: 'oz',
-  };
-  return aliases[key] || key;
-}
-
 function companyUsageMetrics(recordedQuantity: number | null, maximum: number | null) {
   return {
     percent: recordedQuantity !== null && maximum !== null && maximum > 0 ? recordedQuantity / maximum * 100 : null,
@@ -64,9 +44,11 @@ function companyUsageMetrics(recordedQuantity: number | null, maximum: number | 
 }
 
 // Totals always retain their unit: a bucket and a scoop are never combined.
-export function companyConsumptionReport(month: string, properties: Property[], periods: Period[], archive: HistoryProperty[], population?: PopulationAdjustment) {
+export function companyConsumptionReport(month: string, properties: Property[], periods: Period[], archive: HistoryProperty[], population?: PopulationAdjustment, maximums: ConsumptionMaximum[] = []) {
   if (population && (!Number.isInteger(population.basePropertyCount) || population.basePropertyCount <= 0)) throw new Error('The property population base must be a positive integer.');
   const matched = matchConsumptionHistory(properties, archive);
+  const supplied = matchConsumptionMaximums(properties, maximums);
+  const suppliedProducts = new Set(maximums.map((row) => `${productKey(row.chemicalName)}:${unitKey(row.unit)}`));
   const uploaded = new Map(periods.filter((period) => period.sourceName).map((period) => [period.propertyId, period]));
   const uploadedProperties = properties.filter((property) => uploaded.has(property.id)).length;
   const adjustmentFactor = population ? uploadedProperties > 0 ? uploadedProperties / population.basePropertyCount : null : 1;
@@ -100,6 +82,7 @@ export function companyConsumptionReport(month: string, properties: Property[], 
     };
 
     for (const chemical of history?.chemicals || []) {
+      if (suppliedProducts.has(`${productKey(chemical.name)}:${unitKey(chemical.unit)}`)) continue;
       if (monthlyCompanyMaximums[`${productKey(chemical.name)}:${unitKey(chemical.unit)}`] !== undefined) continue;
       const range = historicalRange(history, chemical.name, chemical.unit, month);
       if (!range) continue;
@@ -107,6 +90,13 @@ export function companyConsumptionReport(month: string, properties: Property[], 
       // An alias in the archive must not allocate a property's maximum twice.
       row.maximum = Math.max(row.maximum ?? 0, range.expectedMax);
       row.expectedQuantity = Math.max(row.expectedQuantity ?? 0, range.expectedQuantity);
+    }
+
+    // The workbook already includes 2025-2026 data and new properties. Sum only
+    // the unique properties in this month's uploaded report; do not scale again.
+    if (period) for (const maximum of supplied.get(property.id) || []) {
+      const row = rowFor(group(maximum.chemicalName, maximum.unit));
+      row.maximum = Math.max(row.maximum ?? 0, maximum.maximum);
     }
 
     for (const chemical of period?.chemicals || []) {
@@ -123,12 +113,13 @@ export function companyConsumptionReport(month: string, properties: Property[], 
   }
 
   const chemicals = [...groups.values()].map((target) => {
-    const manualMonthlyMaximum = monthlyCompanyMaximums[target.id] ?? null;
+    const workbook = suppliedProducts.has(target.id);
+    const manualMonthlyMaximum = workbook ? null : monthlyCompanyMaximums[target.id] ?? null;
     const manual = manualMonthlyMaximum !== null;
     const rows = [...target.rows.values()].sort((a, b) => a.propertyName.localeCompare(b.propertyName));
     const referenced = rows.filter((row) => row.maximum !== null);
     const baseMaximum = manualMonthlyMaximum ?? (referenced.length ? referenced.reduce((sum, row) => sum + row.maximum!, 0) : null);
-    const maximum = baseMaximum !== null && adjustmentFactor !== null ? baseMaximum * adjustmentFactor : null;
+    const maximum = workbook ? baseMaximum : baseMaximum !== null && adjustmentFactor !== null ? baseMaximum * adjustmentFactor : null;
     const recordedQuantity = target.hasRecordedProduct ? rows.reduce((sum, row) => sum + (row.recordedQuantity ?? 0), 0) : null;
     const unreferenced = manual ? [] : rows.filter((row) => row.maximum === null && row.recordedQuantity !== null);
     const unreferencedQuantity = unreferenced.reduce((sum, row) => sum + (row.recordedQuantity ?? 0), 0);
@@ -140,11 +131,11 @@ export function companyConsumptionReport(month: string, properties: Property[], 
     const coverageComplete = referenceProperties > 0 && reportedReferenceProperties === referenceProperties && unreferencedQuantity === 0;
     return {
       id: target.id, name: target.name, unit: target.unit, recordedQuantity, maximum,
-      baseMaximum, updatedMaximum: maximum, populationAdjusted: Boolean(population), adjustmentFactor: population ? adjustmentFactor : null,
+      baseMaximum, updatedMaximum: maximum, populationAdjusted: !workbook && Boolean(population), adjustmentFactor: !workbook && population ? adjustmentFactor : null,
       comparableQuantity, comparisonMaximum,
-      maximumSource: manual ? 'MANUAL_COMPANY' as const : 'HISTORY_2025' as const,
+      maximumSource: workbook ? 'WORKBOOK_PROPERTY' as const : manual ? 'MANUAL_COMPANY' as const : 'HISTORY_2025' as const,
       manualMonthlyMaximum,
-      expectedQuantity: referenced.length ? referenced.reduce((sum, row) => sum + row.expectedQuantity!, 0) : null,
+      expectedQuantity: workbook ? null : referenced.length ? referenced.reduce((sum, row) => sum + row.expectedQuantity!, 0) : null,
       ...companyUsageMetrics(recordedQuantity, maximum),
       referenceProperties, reportedReferenceProperties,
       unreferencedProperties: unreferenced.length, unreferencedQuantity, coverageComplete,
@@ -157,6 +148,7 @@ export function companyConsumptionReport(month: string, properties: Property[], 
     thresholds: { warning: 80, attention: 90, maximum: 100 },
     activeProperties: properties.length, uploadedProperties,
     basePropertyCount: population?.basePropertyCount ?? null,
+    maximumReferenceSources: [...new Set(maximums.map((row) => row.sourceName))],
     monthlyPropertyCounts: [{ month, properties: uploadedProperties }],
     matchedHistoryProperties: matched.size,
     sources: [...new Set(periods.filter((period) => period.sourceName).map((period) => period.sourceName!))],
@@ -166,12 +158,12 @@ export function companyConsumptionReport(month: string, properties: Property[], 
 
 // Global percentages use the same summed company quantities and maxima
 // displayed in the monthly reports, never an average of monthly percentages.
-export function globalCompanyConsumptionReport(properties: Property[], periods: Array<Period & { month: string }>, archive: HistoryProperty[], population?: PopulationAdjustment) {
+export function globalCompanyConsumptionReport(properties: Property[], periods: Array<Period & { month: string }>, archive: HistoryProperty[], population?: PopulationAdjustment, maximums: ConsumptionMaximum[] = []) {
   const propertyIds = new Set(properties.map((property) => property.id));
   const uploaded = periods.filter((period) => period.sourceName && propertyIds.has(period.propertyId));
   const months = [...new Set(uploaded.map((period) => period.month))].sort();
-  const monthly = months.map((month) => companyConsumptionReport(month, properties, uploaded.filter((period) => period.month === month), archive, population));
-  const empty = companyConsumptionReport('2025-01', properties, [], [], population);
+  const monthly = months.map((month) => companyConsumptionReport(month, properties, uploaded.filter((period) => period.month === month), archive, population, maximums));
+  const empty = companyConsumptionReport('2025-01', properties, [], [], population, maximums);
   type ChemicalTotal = typeof empty.chemicals[number];
   type GlobalRow = PropertyTotal & { comparableQuantity: number | null; comparisonMaximum: number | null; referenceMonths: number; reportedMonths: number };
   const groups = new Map<string, {
@@ -226,7 +218,7 @@ export function globalCompanyConsumptionReport(properties: Property[], periods: 
 
   const chemicals = [...groups.values()].map(({ total, rows, references, reported, unreferenced, referencePropertyMonths, reportedReferencePropertyMonths }) => ({
     ...total,
-    adjustmentFactor: population && total.maximum !== null && total.baseMaximum !== null && total.baseMaximum > 0 ? total.maximum / total.baseMaximum : null,
+    adjustmentFactor: total.populationAdjusted && total.maximum !== null && total.baseMaximum !== null && total.baseMaximum > 0 ? total.maximum / total.baseMaximum : null,
     ...companyUsageMetrics(total.recordedQuantity, total.maximum),
     referenceProperties: total.maximumSource === 'MANUAL_COMPANY' && monthly.length ? properties.length : references.size,
     reportedReferenceProperties: total.maximumSource === 'MANUAL_COMPANY' ? new Set(uploaded.map((period) => period.propertyId)).size : reported.size,

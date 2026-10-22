@@ -27,15 +27,16 @@ export class ChemicalConsumptionService {
     const global = month === 'global';
     if (!global) this.validMonth(month);
     const active = { deletedAt: null, lifecycleStatus: { not: 'INACTIVE' } };
-    const [properties, periods, archive, available] = await Promise.all([
+    const [properties, periods, archive, available, maximums] = await Promise.all([
       this.prisma.property.findMany({ where: active, select: { id: true, name: true, code: true }, orderBy: { name: 'asc' } }),
       this.prisma.chemicalConsumptionPeriod.findMany({ where: { ...(global ? {} : { month }), sourceName: { not: null }, property: active }, select: { propertyId: true, month: true, sourceName: true, chemicals: true } }),
       this.readHistory(),
       this.prisma.chemicalConsumptionPeriod.findMany({ where: { sourceName: { not: null }, property: active }, select: { month: true }, distinct: ['month'], orderBy: { month: 'desc' } }),
+      this.prisma.chemicalConsumptionMaximum.findMany({ select: { propertyCode: true, propertyName: true, chemicalName: true, unit: true, maximum: true, recordedMonths: true, excludedMonths: true, sourceName: true } }),
     ]);
     const report = global
-      ? globalCompanyConsumptionReport(properties, periods as unknown as Parameters<typeof globalCompanyConsumptionReport>[1], archive, { basePropertyCount: companyMaximumBaseProperties })
-      : companyConsumptionReport(month, properties, periods as unknown as Parameters<typeof companyConsumptionReport>[2], archive, { basePropertyCount: companyMaximumBaseProperties });
+      ? globalCompanyConsumptionReport(properties, periods as unknown as Parameters<typeof globalCompanyConsumptionReport>[1], archive, { basePropertyCount: companyMaximumBaseProperties }, maximums)
+      : companyConsumptionReport(month, properties, periods as unknown as Parameters<typeof companyConsumptionReport>[2], archive, { basePropertyCount: companyMaximumBaseProperties }, maximums);
     return { ...report, availableMonths: available.map((period) => period.month) };
   }
   async list(month: string) {
