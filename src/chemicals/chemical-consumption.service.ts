@@ -41,27 +41,34 @@ export class ChemicalConsumptionService {
     return { ...report, availableMonths: available.map((period) => period.month) };
   }
   async list(month: string) {
-    this.validMonth(month);
+    const allMonths = month === 'all';
+    if (!allMonths) this.validMonth(month);
     const year = month.slice(0, 4);
     const [properties, periods, allPeriods, archive] = await Promise.all([
       this.prisma.property.findMany({ where: { deletedAt: null }, select: propertySelect, orderBy: { name: 'asc' } }),
-      this.prisma.chemicalConsumptionPeriod.findMany({ where: { month, property: { deletedAt: null } }, include: { property: { select: propertySelect } } }),
-      this.prisma.chemicalConsumptionPeriod.findMany({ where: { month: { startsWith: `${year}-` }, sourceName: { not: null }, property: { deletedAt: null } }, include: { property: { select: propertySelect } }, orderBy: [{ propertyId: 'asc' }, { month: 'asc' }] }),
+      this.prisma.chemicalConsumptionPeriod.findMany({ where: { ...(allMonths ? {} : { month }), property: { deletedAt: null } }, include: { property: { select: propertySelect } }, orderBy: [{ month: 'desc' }, { propertyId: 'asc' }] }),
+      this.prisma.chemicalConsumptionPeriod.findMany({ where: { ...(allMonths ? {} : { month: { startsWith: `${year}-` } }), sourceName: { not: null }, property: { deletedAt: null } }, include: { property: { select: propertySelect } }, orderBy: [{ propertyId: 'asc' }, { month: 'asc' }] }),
       this.readHistory(),
     ]);
     const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]);
     const combined: any[] = periods.map((period) => {
       const archived = history.get(period.propertyId);
-      return !period.sourceName && archived && historicalChemicals(archived, month)
-        ? { ...period, chemicals: historicalChemicals(archived, month), sourceName: 'Skimmer history 2025', historicalOnly: true }
+      return !period.sourceName && archived && historicalChemicals(archived, period.month)
+        ? { ...period, chemicals: historicalChemicals(archived, period.month), sourceName: 'Skimmer history 2025', historicalOnly: true }
         : period;
     });
+    const existingPeriods = new Set(combined.map((period) => `${period.propertyId}|${period.month}`));
+    const historicalMonths = allMonths ? Array.from({ length: 12 }, (_, index) => `2025-${String(index + 1).padStart(2, '0')}`) : [month];
     for (const property of properties) {
-      if (combined.some((period) => period.propertyId === property.id)) continue;
       const archived = history.get(property.id);
-      const chemicals = archived && historicalChemicals(archived, month);
-      if (chemicals) combined.push({ propertyId: property.id, property, month, chemicals, sourceName: 'Skimmer history 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
+      if (!archived) continue;
+      for (const historicalMonth of historicalMonths) {
+        if (existingPeriods.has(`${property.id}|${historicalMonth}`)) continue;
+        const chemicals = historicalChemicals(archived, historicalMonth);
+        if (chemicals) combined.push({ propertyId: property.id, property, month: historicalMonth, chemicals, sourceName: 'Skimmer history 2025', historicalOnly: true, monthlyFee: null, feeSource: null, budgetPercent: null, references: [], seasonFactor: 1 });
+      }
     }
+    combined.sort((a, b) => b.month.localeCompare(a.month) || a.propertyId.localeCompare(b.propertyId));
     const recurring = new Map<string, { propertyId: string; propertyName: string; entries: Array<{ month: string; chemicalName: string; unit: string; quantity: number; threshold: number; excessPercent: number }> }>();
     for (const period of allPeriods) {
       const presented = this.present(period, history.get(period.propertyId));
