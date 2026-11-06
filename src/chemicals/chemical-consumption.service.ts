@@ -145,11 +145,17 @@ export class ChemicalConsumptionService {
   }
   async preview(data: ConsumptionImportDto) {
     this.validMonth(data.month);
-    const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true } });
+    const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true, addressLine1: true } });
     const periods = await this.prisma.chemicalConsumptionPeriod.findMany({ where: { month: data.month }, select: { propertyId: true, sourceName: true, feeSource: true } });
     return data.rows.map((row) => {
       const codeMatches = row.code ? properties.filter((property) => property.code === row.code) : [];
-      const matches = row.propertyId ? properties.filter((property) => property.id === row.propertyId) : codeMatches.length ? codeMatches : properties.filter((property) => nameKey(property.name) === nameKey(row.propertyName));
+      const nameMatches = properties.filter((property) => nameKey(property.name) === nameKey(row.propertyName));
+      const addressMatches = row.addressLine1 ? properties.filter((property) => property.addressLine1 && nameKey(property.addressLine1) === nameKey(row.addressLine1!)) : [];
+      const namedAddressMatches = addressMatches.filter((property) => nameMatches.some((named) => named.id === property.id));
+      let matches = nameMatches;
+      if (row.propertyId) matches = properties.filter((property) => property.id === row.propertyId);
+      else if (codeMatches.length) matches = codeMatches;
+      else if (row.addressLine1) matches = namedAddressMatches.length ? namedAddressMatches : addressMatches;
       const property = matches.length === 1 ? matches[0] : null;
       const previous = periods.find((period) => period.propertyId === property?.id);
       return { ...row, matchedProperty: property, status: !property ? matches.length > 1 ? 'AMBIGUOUS' : 'UNMATCHED' : 'MATCHED', existing: Boolean(previous && ((row.chemicals !== undefined && previous.sourceName) || (row.monthlyFee !== undefined && previous.feeSource))) };

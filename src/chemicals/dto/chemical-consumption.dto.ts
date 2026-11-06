@@ -22,6 +22,7 @@ export class ConsumptionReferenceDto {
 export class ConsumptionImportRowDto {
   @IsString() @MaxLength(160) propertyName!: string;
   @IsOptional() @IsString() @MaxLength(100) code?: string;
+  @IsOptional() @IsString() @MaxLength(300) addressLine1?: string;
   @IsOptional() @IsUUID() propertyId?: string;
   @IsOptional() @IsNumber() @Min(0) monthlyFee?: number;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ConsumptionChemicalDto) chemicals?: ConsumptionChemicalDto[];

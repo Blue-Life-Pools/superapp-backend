@@ -60,3 +60,38 @@ describe('Home consumption history periods', () => {
     expect(prisma.chemicalConsumptionPeriod.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('Skimmer properties without codes', () => {
+  const properties = [
+    { id: 'lafoy', name: 'NV PROPERTY 10380', code: null, addressLine1: '10380 Lafoy Rd' },
+    { id: 'old-nv', name: 'NV PROPERTY 10380', code: 'OLD-CODE', addressLine1: '4623 w Browning ave' },
+    { id: 'browning', name: 'NV PROPERTY 4623', code: 'OTHER-CODE', addressLine1: '4623 w Browning ave' },
+  ];
+  function setup() {
+    const prisma = { property: { findMany: jest.fn().mockResolvedValue(properties) }, chemicalConsumptionPeriod: { findMany: jest.fn().mockResolvedValue([]) } };
+    const service = new ChemicalConsumptionService(prisma as unknown as PrismaService);
+    return service;
+  }
+  it('matches a PDF property by its unique exact address when the code is absent', async () => {
+    const [result] = await setup().preview({ month: '2026-10', sourceName: 'skimmer.pdf', rows: [{ propertyName: 'NV PROPERTY HOLDINGS', addressLine1: '10380 Lafoy Rd.' }] });
+    expect(result.status).toBe('MATCHED');
+    expect(result.matchedProperty?.id).toBe('lafoy');
+  });
+  it('does not assign a shared address to an arbitrary property', async () => {
+    const [result] = await setup().preview({ month: '2026-10', sourceName: 'skimmer.pdf', rows: [{ propertyName: 'NV PROPERTY HOLDINGS', addressLine1: '4623 w Browning ave' }] });
+    expect(result.status).toBe('AMBIGUOUS');
+    expect(result.matchedProperty).toBeNull();
+  });
+  it('uses the name to disambiguate multiple properties at the same exact address', async () => {
+    const [result] = await setup().preview({ month: '2026-10', sourceName: 'skimmer.pdf', rows: [{ propertyName: 'NV PROPERTY 4623', addressLine1: '4623 w Browning ave' }] });
+    expect(result.matchedProperty?.id).toBe('browning');
+  });
+  it('does not fall back to a name when the supplied address does not match', async () => {
+    const [result] = await setup().preview({ month: '2026-10', sourceName: 'skimmer.pdf', rows: [{ propertyName: 'NV PROPERTY 4623', addressLine1: '999 Unknown St' }] });
+    expect(result.status).toBe('UNMATCHED');
+  });
+  it('preserves code matching and imports that only supply a property name', async () => {
+    const rows = await setup().preview({ month: '2026-10', sourceName: 'skimmer.pdf', rows: [{ propertyName: 'Source label', code: 'OTHER-CODE' }, { propertyName: 'NV PROPERTY 4623' }] });
+    expect(rows.map(row => row.matchedProperty?.id)).toEqual(['browning', 'browning']);
+  });
+});
