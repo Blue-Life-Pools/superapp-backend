@@ -237,11 +237,17 @@ export class ChemicalsService {
     return whatsappUrl.toString();
   }
 
-  findAll() {
+  findAll(month?: string) {
+    if (month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new BadRequestException('Use a valid month in YYYY-MM format.');
+    }
+    const start = month ? new Date(`${month}-01T00:00:00.000Z`) : null;
+    const end = start ? new Date(start) : null;
+    if (end) end.setUTCMonth(end.getUTCMonth() + 1);
     return this.prisma.chemicalReport.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...(start && end ? { serviceDate: { gte: start, lt: end } } : {}) },
       orderBy: [{ serviceDate: 'desc' }, { createdAt: 'desc' }],
-      take: 500,
+      ...(month ? {} : { take: 500 }),
     });
   }
 

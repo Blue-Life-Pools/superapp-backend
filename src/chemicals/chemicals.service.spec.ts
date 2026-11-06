@@ -54,6 +54,29 @@ describe('ChemicalsService', () => {
     create.mockResolvedValue({});
   });
 
+  it('includes the whole selected month even when newer records exceed the history limit', async () => {
+    const october = ['2026-10-01T00:00:00.000Z', '2026-10-15T12:00:00.000Z', '2026-10-31T23:59:59.999Z'].map((date, id) => ({ id: `oct-${id}`, serviceDate: new Date(date), deletedAt: null }));
+    const history = [...Array.from({ length: 600 }, (_, id) => ({ id: `nov-${id}`, serviceDate: new Date('2026-11-01T00:00:00.000Z'), deletedAt: null })), ...october, { id: 'deleted', serviceDate: new Date('2026-10-10'), deletedAt: new Date() }, { id: 'sep', serviceDate: new Date('2026-09-30T23:59:59.999Z'), deletedAt: null }];
+    findMany.mockImplementation(async ({ where, take }) => {
+      const result = history.filter((row) => !row.deletedAt && (!where.serviceDate || (row.serviceDate >= where.serviceDate.gte && row.serviceDate < where.serviceDate.lt)));
+      return take === undefined ? result : result.slice(0, take);
+    });
+    expect(await service.findAll('2026-10')).toEqual(october);
+    expect(await service.findAll()).toHaveLength(500);
+  });
+
+  it('rejects invalid monthly report ranges', () => {
+    for (const month of ['2026-00', '2026-13', '2026-1', 'October', '2026-10-01']) {
+      expect(() => service.findAll(month)).toThrow(BadRequestException);
+    }
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('keeps the last day of December in its selected year', async () => {
+    await service.findAll('2026-12');
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { deletedAt: null, serviceDate: { gte: new Date('2026-12-01'), lt: new Date('2027-01-01') } } }));
+  });
+
   it('rejects a report without chemical quantities', async () => {
     const data = reportData();
     data.tabsQuantity = 0;

@@ -93,8 +93,8 @@ export class ChemicalsController {
   }
 
   @Get('reports')
-  findAll() {
-    return this.chemicalsService.findAll();
+  findAll(@Query('month') month?: string) {
+    return this.chemicalsService.findAll(month);
   }
 
   @Post('owner/access')
