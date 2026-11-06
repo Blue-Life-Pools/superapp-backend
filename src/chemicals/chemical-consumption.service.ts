@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../auth/auth.service';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
 import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
+import { matchConsumptionProperties } from './consumption-property-matching';
 
 const propertySelect = { id: true, name: true, code: true, waterBodies: true, chemicalFollowUpResolvedAt: true, chemicalFollowUpResolution: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -145,17 +146,10 @@ export class ChemicalConsumptionService {
   }
   async preview(data: ConsumptionImportDto) {
     this.validMonth(data.month);
-    const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true, addressLine1: true } });
+    const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true, addressLine1: true, city: true, state: true } });
     const periods = await this.prisma.chemicalConsumptionPeriod.findMany({ where: { month: data.month }, select: { propertyId: true, sourceName: true, feeSource: true } });
     return data.rows.map((row) => {
-      const codeMatches = row.code ? properties.filter((property) => property.code === row.code) : [];
-      const nameMatches = properties.filter((property) => nameKey(property.name) === nameKey(row.propertyName));
-      const addressMatches = row.addressLine1 ? properties.filter((property) => property.addressLine1 && nameKey(property.addressLine1) === nameKey(row.addressLine1!)) : [];
-      const namedAddressMatches = addressMatches.filter((property) => nameMatches.some((named) => named.id === property.id));
-      let matches = nameMatches;
-      if (row.propertyId) matches = properties.filter((property) => property.id === row.propertyId);
-      else if (codeMatches.length) matches = codeMatches;
-      else if (row.addressLine1) matches = namedAddressMatches.length ? namedAddressMatches : addressMatches;
+      const matches = matchConsumptionProperties(properties, row);
       const property = matches.length === 1 ? matches[0] : null;
       const previous = periods.find((period) => period.propertyId === property?.id);
       return { ...row, matchedProperty: property, status: !property ? matches.length > 1 ? 'AMBIGUOUS' : 'UNMATCHED' : 'MATCHED', existing: Boolean(previous && ((row.chemicals !== undefined && previous.sourceName) || (row.monthlyFee !== undefined && previous.feeSource))) };
