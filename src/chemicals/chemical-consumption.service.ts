@@ -9,7 +9,7 @@ import type { HistoryProperty } from './consumption-history.types';
 import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
 import { matchConsumptionProperties } from './consumption-property-matching';
 
-const propertySelect = { id: true, name: true, code: true, waterBodies: true, chemicalFollowUpResolvedAt: true, chemicalFollowUpResolution: true } as const;
+const propertySelect = { id: true, name: true, code: true, lifecycleStatus: true, updatedAt: true, waterBodies: true, chemicalFollowUpResolvedAt: true, chemicalFollowUpResolution: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 @Injectable()
 export class ChemicalConsumptionService {
