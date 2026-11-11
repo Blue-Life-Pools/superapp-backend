@@ -9,7 +9,8 @@ export function commercialWeight(body: ConsumptionBody) {
 function fallbackWeights(bodies: ConsumptionBody[]) {
   const pools = bodies.filter((body) => body.type !== 'SPA');
   if (pools.length === 1 && bodies.length === 2) return bodies.map((body) => body.type === 'SPA' ? 20 : 80);
-  return bodies.map((body) => body.type === 'SPA' ? 20 : 100 / Math.max(1, pools.length));
+  if (pools.length === bodies.length && pools.every((body) => body.type === 'SWIMMING_POOL')) return bodies.map(() => 1);
+  return bodies.map((body) => commercialWeight(body));
 }
 
 // Largest remainders preserve the original total, including cents and fractional doses.

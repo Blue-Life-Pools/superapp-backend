@@ -27,6 +27,15 @@ describe('chemical consumption allocation', () => {
     expect(result.bodies.map((item) => item.share)).toEqual([0.8, 0.2]);
     expect(result.bodies.map((item) => item.chemicalCost)).toEqual([80, 20]);
   });
+  it('uses the pool size and splits the remaining share across fountains', () => {
+    const result = allocateConsumption([
+      body('Pool', 47000, 'SWIMMING_POOL', 'MEDIUM'),
+      body('Fountain 1', null, 'DECORATIVE_WATER_FEATURE'),
+      body('Fountain 2', null, 'DECORATIVE_WATER_FEATURE'),
+      body('Fountain 3', null, 'DECORATIVE_WATER_FEATURE'),
+    ], 1000, 100);
+    expect(result.bodies.map((item) => Number(item.share.toFixed(4)))).toEqual([0.6087, 0.1304, 0.1304, 0.1304]);
+  });
   it('leaves the total visible when no active bodies exist', () => {
     const result = allocateConsumption([], 1600, 315.38);
     expect(result.unallocatedFee).toBe(1600);
