@@ -6,6 +6,12 @@ export function commercialWeight(body: ConsumptionBody) {
   return commercialBodyReferences[body.type] ?? commercialPoolReferences[body.size || ''] ?? 700;
 }
 
+function fallbackWeights(bodies: ConsumptionBody[]) {
+  const pools = bodies.filter((body) => body.type !== 'SPA');
+  if (pools.length === 1 && bodies.length === 2) return bodies.map((body) => body.type === 'SPA' ? 20 : 80);
+  return bodies.map((body) => body.type === 'SPA' ? 20 : 100 / Math.max(1, pools.length));
+}
+
 // Largest remainders preserve the original total, including cents and fractional doses.
 export function distributeInteger(total: number, weights: number[]) {
   if (!weights.length) return [];
@@ -21,7 +27,7 @@ export function distributeInteger(total: number, weights: number[]) {
 export function allocateConsumption(bodies: ConsumptionBody[], monthlyFee: number | null, cost: number) {
   const active = bodies.filter((body) => body.active);
   const volumeComplete = active.length > 0 && active.every((body) => body.gallons !== null && body.gallons > 0);
-  const weights = active.map((body) => volumeComplete ? body.gallons! : commercialWeight(body));
+  const weights = volumeComplete ? active.map((body) => body.gallons!) : fallbackWeights(active);
   const costCents = Math.round(cost * 100);
   const assignedCosts = distributeInteger(costCents, weights);
   const totalFeeCents = monthlyFee === null ? 0 : Math.round(monthlyFee * 100);

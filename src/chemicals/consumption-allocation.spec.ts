@@ -20,7 +20,12 @@ describe('chemical consumption allocation', () => {
   it('uses commercial sizes when any volume is missing', () => {
     const result = allocateConsumption([body('Small', 10000, 'SWIMMING_POOL', 'SMALL'), body('Large', null, 'SWIMMING_POOL', 'LARGE')], 1500, 150);
     expect(result.basis).toBe('COMMERCIAL_SIZE');
-    expect(result.bodies.map((item) => item.monthlyFee)).toEqual([600, 900]);
+    expect(result.bodies.map((item) => item.monthlyFee)).toEqual([750, 750]);
+  });
+  it('uses 80/20 when a property has one pool and one spa without complete gallons', () => {
+    const result = allocateConsumption([body('Pool', null), body('Spa', null, 'SPA')], 1000, 100);
+    expect(result.bodies.map((item) => item.share)).toEqual([0.8, 0.2]);
+    expect(result.bodies.map((item) => item.chemicalCost)).toEqual([80, 20]);
   });
   it('leaves the total visible when no active bodies exist', () => {
     const result = allocateConsumption([], 1600, 315.38);
