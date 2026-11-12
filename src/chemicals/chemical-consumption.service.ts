@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { allocateConsumption, distributeInteger } from './consumption-allocation';
-import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto } from './dto/chemical-consumption.dto';
+import { ConsumptionChemicalDto, ConsumptionImportDto, ConsumptionReferenceDto, CreateChemicalFollowUpCommentDto, SolveChemicalFollowUpDto, UpdateChemicalFollowUpCommentDto, UpdateConsumptionPeriodDto, UpdateConsumptionChemicalsDto, UpdateConsumptionTechnicianDto, UpdateConsumptionWaterBodiesDto } from './dto/chemical-consumption.dto';
 import type { AuthenticatedUser } from '../auth/auth.service';
 import { historicalChemicals, historicalRange, matchConsumptionHistory } from './consumption-history';
 import type { HistoryProperty } from './consumption-history.types';
@@ -175,12 +175,63 @@ export class ChemicalConsumptionService {
     if (!property) throw new NotFoundException('Property not found.');
     const values = { monthlyFee: data.monthlyFee, feeSource: 'MANUAL', budgetPercent: data.budgetPercent ?? null, seasonFactor: data.seasonFactor, references: data.references as unknown as Prisma.InputJsonValue };
     const period = await this.prisma.chemicalConsumptionPeriod.upsert({ where: { propertyId_month: { propertyId, month } }, create: { propertyId, month, ...values }, update: values, include: { property: { select: propertySelect } } });
+    return this.presentStoredPeriod(period);
+  }
+
+  private async presentStoredPeriod(period: any) {
     const [properties, archive] = await Promise.all([
       this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true, code: true } }),
       this.readHistory(),
     ]);
-    const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]).get(propertyId);
-    const archived = history && !period.sourceName && historicalChemicals(history, month);
+    const history = matchConsumptionHistory(properties, archive as unknown as HistoryProperty[]).get(period.propertyId);
+    const archived = history && !period.sourceName && historicalChemicals(history, period.month);
     return this.present(archived ? { ...period, chemicals: archived, sourceName: 'Skimmer history 2025', historicalOnly: true } : period, history);
+  }
+
+  async updateChemicals(propertyId: string, month: string, data: UpdateConsumptionChemicalsDto) {
+    this.validMonth(month);
+    const property = await this.prisma.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    if (!property) throw new NotFoundException('Property not found.');
+    const keys = new Set<string>();
+    for (const chemical of data.chemicals) {
+      if (!chemical.name.trim() || !chemical.unit.trim()) throw new BadRequestException('Chemical name and unit are required.');
+      const key = `${chemical.name.trim().toLowerCase()}|${chemical.unit.trim().toLowerCase()}`;
+      if (keys.has(key)) throw new BadRequestException('Combine duplicate chemicals with the same unit before saving.');
+      keys.add(key);
+      const usage = chemical.technicians ?? [];
+      if (usage.some((entry) => !entry.name.trim())) throw new BadRequestException('Each usage entry needs a technician name.');
+      if (usage.reduce((sum, entry) => sum + entry.quantity, 0) > chemical.quantity + .0001) throw new BadRequestException(`${chemical.name}: technician quantities exceed the chemical total.`);
+      if (usage.reduce((sum, entry) => sum + entry.cost, 0) > chemical.cost + .01) throw new BadRequestException(`${chemical.name}: technician costs exceed the chemical total.`);
+    }
+    const existing = await this.prisma.chemicalConsumptionPeriod.findUnique({ where: { propertyId_month: { propertyId, month } }, select: { sourceName: true } });
+    const values = { chemicals: data.chemicals as unknown as Prisma.InputJsonValue, sourceName: existing?.sourceName || 'Manual chemical entry', ...(data.monthlyFee === undefined ? {} : { monthlyFee: data.monthlyFee, feeSource: 'MANUAL' }) };
+    const period = await this.prisma.chemicalConsumptionPeriod.upsert({ where: { propertyId_month: { propertyId, month } }, create: { propertyId, month, ...values }, update: values, include: { property: { select: propertySelect } } });
+    return this.presentStoredPeriod(period);
+  }
+
+  async updateTechnician(propertyId: string, month: string, data: UpdateConsumptionTechnicianDto) {
+    this.validMonth(month);
+    const property = await this.prisma.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: { id: true } });
+    if (!property) throw new NotFoundException('Property not found.');
+    const technicianOverride = data.technicianOverride?.trim() || null;
+    const period = await this.prisma.chemicalConsumptionPeriod.upsert({ where: { propertyId_month: { propertyId, month } }, create: { propertyId, month, technicianOverride }, update: { technicianOverride }, include: { property: { select: propertySelect } } });
+    return this.presentStoredPeriod(period);
+  }
+
+  async updateWaterBodies(propertyId: string, data: UpdateConsumptionWaterBodiesDto) {
+    await this.prisma.$transaction(async (tx) => {
+      const property = await tx.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: { id: true, waterBodies: { select: { id: true } } } });
+      if (!property) throw new NotFoundException('Property not found.');
+      const ids = data.waterBodies.flatMap((body) => body.id ? [body.id] : []);
+      if (ids.length !== new Set(ids).size) throw new BadRequestException('A water body was included more than once.');
+      if (ids.some((id) => !property.waterBodies.some((body) => body.id === id))) throw new BadRequestException('A water body does not belong to this property.');
+      for (const body of data.waterBodies) {
+        if (!body.name.trim()) throw new BadRequestException('Water body name is required.');
+        const values = { name: body.name.trim(), type: body.type, size: body.size ?? null, gallons: body.gallons ?? null, technicianName: body.technicianName?.trim() || null, ...(body.active === undefined ? {} : { active: body.active }) };
+        if (body.id) await tx.waterBody.update({ where: { id: body.id }, data: values });
+        else await tx.waterBody.create({ data: { propertyId, ...values } });
+      }
+    });
+    return this.prisma.property.findFirst({ where: { id: propertyId, deletedAt: null }, select: propertySelect });
   }
 }

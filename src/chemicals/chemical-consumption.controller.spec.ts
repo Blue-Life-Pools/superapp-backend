@@ -11,7 +11,7 @@ describe('Home chemical consumption access', () => {
     expect(roles).toEqual(expect.arrayContaining(['COMMERCIAL', 'CHEMICALS', 'HEALTH', 'REPORTS', 'QUALITY']));
   });
   it('keeps import and update restricted to the Chemicals role', () => {
-    for (const method of ['preview', 'import', 'update'] as const) {
+    for (const method of ['preview', 'import', 'update', 'updateChemicals', 'updateTechnician', 'updateWaterBodies'] as const) {
       expect(reflector.getAllAndOverride(APP_ROLES_KEY, [controller.prototype[method], controller])).toEqual(['CHEMICALS']);
     }
   });

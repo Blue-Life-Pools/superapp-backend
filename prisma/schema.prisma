@@ -240,6 +240,7 @@ model ChemicalConsumptionPeriod {
   monthlyFee Decimal? @db.Decimal(12, 2)
   feeSource String?
   chemicals Json @default("[]")
+  technicianOverride String?
   sourceName String?
   budgetPercent Float?
   seasonFactor Float @default(1)

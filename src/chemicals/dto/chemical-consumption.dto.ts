@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { CreateWaterBodyDto } from '../../properties/dto/create-water-body.dto';
 
 export class ConsumptionTechnicianUsageDto {
   @IsString() @MaxLength(200) name!: string;
@@ -38,6 +39,24 @@ export class UpdateConsumptionPeriodDto {
   @IsOptional() @IsNumber() @Min(0) @Max(100) budgetPercent?: number | null;
   @IsNumber() @Min(0.1) @Max(5) seasonFactor!: number;
   @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ConsumptionReferenceDto) references!: ConsumptionReferenceDto[];
+}
+
+export class UpdateConsumptionChemicalsDto {
+  @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ConsumptionChemicalDto) chemicals!: ConsumptionChemicalDto[];
+  @ValidateIf((_, value) => value !== undefined) @IsNumber() @Min(0) @Max(100000000) monthlyFee?: number;
+}
+
+export class UpdateConsumptionTechnicianDto {
+  @ValidateIf((_, value) => value !== null) @IsString() @MaxLength(200) technicianOverride!: string | null;
+}
+
+export class ConsumptionWaterBodyDto extends CreateWaterBodyDto {
+  @IsOptional() @IsUUID() id?: string;
+  @IsString() @MinLength(1) @MaxLength(160) declare name: string;
+}
+
+export class UpdateConsumptionWaterBodiesDto {
+  @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => ConsumptionWaterBodyDto) waterBodies!: ConsumptionWaterBodyDto[];
 }
 
 export class CreateChemicalFollowUpCommentDto {
