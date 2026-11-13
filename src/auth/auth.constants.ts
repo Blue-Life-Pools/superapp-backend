@@ -6,7 +6,7 @@ export const APP_ROLES_KEY = 'appRoles';
 
 export function allowedAreas(role: AppRole) {
   if (role === 'SUPER_ADMIN' || role === 'OPERATIONS_DIRECTOR') {
-    return ['home', 'commercial', 'chemicals', 'health', 'reports', 'complaints', 'quality'] as const;
+    return ['home', 'commercial', 'opportunities', 'chemicals', 'health', 'reports', 'complaints', 'quality'] as const;
   }
   if (role === 'QUALITY') {
     return ['home', 'quality'] as const;
@@ -14,5 +14,6 @@ export function allowedAreas(role: AppRole) {
   if (role === 'REPORTS') {
     return ['home', 'reports', 'quality'] as const;
   }
+  if (role === 'COMMERCIAL') return ['home', 'commercial', 'opportunities'] as const;
   return ['home', role.toLowerCase()] as const;
 }

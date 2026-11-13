@@ -55,6 +55,7 @@ model Property {
   regularMaintenanceData Json?
   deletedAt              DateTime?
   quickbooksEstimates    QuickBooksEstimate[]
+  opportunities          Opportunity[]
   chemicalConsumptionPeriods ChemicalConsumptionPeriod[]
   chemicalFollowUpComments ChemicalFollowUpComment[]
   chemicalFollowUpResolvedAt DateTime?
@@ -63,6 +64,48 @@ model Property {
   chemicalFollowUpResolvedBy AppUser? @relation("ChemicalFollowUpResolvers", fields: [chemicalFollowUpResolvedById], references: [id], onDelete: SetNull)
 
   @@index([lifecycleStatus])
+}
+
+model Opportunity {
+  id                   String    @id @default(uuid())
+  propertyId           String?
+  property             Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  propertyName         String
+  linkedPropertyName   String?
+  estimateNumber       String?
+  estimateAmount       Decimal?  @db.Decimal(14, 2)
+  status               String?
+  categories           String[]  @default([])
+  contractor           String?
+  name                 String?
+  creationDate         DateTime? @db.Date
+  requestedBy          String?
+  approvalDate         DateTime? @db.Date
+  approvedBy           String?
+  estimatedRepairDate  DateTime? @db.Date
+  inSkimmer            Boolean?
+  assignedTechnician   String?
+  actualRepairDate     DateTime? @db.Date
+  invoiceNumber        String?
+  invoiceAmount        Decimal?  @db.Decimal(14, 2)
+  invoiceDate          DateTime? @db.Date
+  approvalTime         String?
+  repairTime           String?
+  invoiceTime          String?
+  source               String    @default("MANUAL")
+  sourceRecordId       String    @default(uuid())
+  sourceMailbox        String?
+  receivedAt           DateTime?
+  sourceMetadata       Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  @@unique([source, sourceRecordId])
+  @@index([creationDate])
+  @@index([status])
+  @@index([propertyId])
+  @@index([estimateNumber])
 }
 
 model QuickBooksConnection {
