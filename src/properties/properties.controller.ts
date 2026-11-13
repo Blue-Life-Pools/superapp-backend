@@ -46,6 +46,12 @@ export class PropertiesController {
     return this.propertiesService.matchExistingSharePointFolders();
   }
 
+  @Get(':id/proposal-context')
+  @Roles('COMMERCIAL')
+  proposalContext(@Param('id') id: string) {
+    return this.propertiesService.proposalContext(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.propertiesService.findOne(id);

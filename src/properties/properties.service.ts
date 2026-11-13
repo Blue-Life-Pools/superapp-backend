@@ -16,6 +16,7 @@ import { CreateProposalFollowUpDto } from './dto/create-proposal-follow-up.dto';
 import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
 import { EmailDraftsService } from '../email-drafts/email-drafts.service';
+import { proposalHistoryWindow, summarizeProposalHistory } from './proposal-context';
 
 type UploadedImageFile = {
   buffer: Buffer;
@@ -118,6 +119,18 @@ export class PropertiesService {
         },
       },
     });
+  }
+
+  async proposalContext(id: string) {
+    const property = await this.prisma.property.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+    if (!property) throw new NotFoundException('Property not found');
+    const window = proposalHistoryWindow();
+    const periods = await this.prisma.chemicalConsumptionPeriod.findMany({
+      where: { propertyId: id, month: { gte: window.from, lt: window.before } },
+      select: { month: true, monthlyFee: true, sourceName: true, chemicals: true },
+      orderBy: { month: 'asc' },
+    });
+    return { ...summarizeProposalHistory(periods), window };
   }
 
   async findOne(id: string) {
