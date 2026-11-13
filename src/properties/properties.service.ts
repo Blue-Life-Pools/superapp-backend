@@ -832,8 +832,11 @@ export class PropertiesService {
   }
 
   async update(id: string, data: UpdatePropertyDto) {
-    const { contacts, waterBodies, managementCompanyName, ...propertyData } =
+    const { contacts, waterBodies, managementCompanyName, serviceStartDate, ...propertyData } =
       data;
+    const serviceStartUpdate = serviceStartDate === undefined ? {} : {
+      serviceStartDate: serviceStartDate === null ? null : new Date(`${serviceStartDate}T00:00:00.000Z`),
+    };
     const normalizedManagementCompanyName = managementCompanyName?.trim();
     const existing = await this.prisma.property.findUnique({
       where: {
@@ -880,6 +883,7 @@ export class PropertiesService {
         where: { id },
         data: {
           ...propertyData,
+          ...serviceStartUpdate,
           ...(managementCompanyName !== undefined
             ? normalizedManagementCompanyName
               ? {
@@ -938,6 +942,7 @@ export class PropertiesService {
         where: { id },
         data: {
           ...propertyData,
+          ...serviceStartUpdate,
           ...(managementCompanyName !== undefined
             ? normalizedManagementCompanyName
               ? {
