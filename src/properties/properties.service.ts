@@ -17,6 +17,7 @@ import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
 import { EmailDraftsService } from '../email-drafts/email-drafts.service';
 import { proposalHistoryWindow, summarizeProposalHistory } from './proposal-context';
+import { withInternalProposalName } from './proposal-internal-name';
 
 type UploadedImageFile = {
   buffer: Buffer;
@@ -601,7 +602,9 @@ export class PropertiesService {
         propertyId,
         type: data.type,
         notes: data.notes,
-        proposalData: data.proposalData as Prisma.InputJsonObject | undefined,
+        proposalData: data.proposalData && 'internalName' in data.proposalData
+          ? withInternalProposalName(data.proposalData, data.proposalData.internalName)
+          : data.proposalData as Prisma.InputJsonObject | undefined,
         occurredAt: new Date(),
       },
     });
@@ -775,7 +778,10 @@ export class PropertiesService {
     }
     return this.prisma.salesActivity.update({
       where: { id: activityId },
-      data: { notes: data.notes },
+      data: {
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+        ...(data.internalName !== undefined ? { proposalData: withInternalProposalName(activity.proposalData, data.internalName) } : {}),
+      },
       include: {
         followUps: {
           orderBy: {
