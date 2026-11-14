@@ -8,12 +8,13 @@ import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpportunitiesController } from './opportunities.controller';
 import { OpportunitiesService } from './opportunities.service';
+import { OpportunitiesMailService } from './opportunities-mail.service';
 
 describe('Opportunities HTTP scope and intake', () => {
   let app: INestApplication, prisma: any;
   beforeAll(async () => {
     prisma = { opportunity: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue({ id: 'existing', propertyName: 'Property' }), findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'new' }), update: jest.fn().mockResolvedValue({ id: 'existing' }), upsert: jest.fn().mockResolvedValue({ id: 'intake' }) }, property: { findMany: jest.fn().mockResolvedValue([]) } };
-    const module = await Test.createTestingModule({ controllers: [OpportunitiesController], providers: [OpportunitiesService, { provide: PrismaService, useValue: prisma }, { provide: ConfigService, useValue: { get: () => 'test-intake-key' } }, { provide: AuthService, useValue: { session: async (header?: string) => { const role = header?.replace('Bearer ', ''); if (!role) throw new UnauthorizedException(); return { role }; } } }, { provide: APP_GUARD, useClass: AuthGuard }] }).compile();
+    const module = await Test.createTestingModule({ controllers: [OpportunitiesController], providers: [OpportunitiesService, { provide: OpportunitiesMailService, useValue: { status: async () => ({ provider: 'Microsoft 365', configured: true }), sync: async () => ({ created: 0 }), setEnabled: async () => ({ enabled: true }), reviewMessages: async () => [], resolveReview: async () => ({ id: 'reviewed' }) } }, { provide: PrismaService, useValue: prisma }, { provide: ConfigService, useValue: { get: () => 'test-intake-key' } }, { provide: AuthService, useValue: { session: async (header?: string) => { const role = header?.replace('Bearer ', ''); if (!role) throw new UnauthorizedException(); return { role }; } } }, { provide: APP_GUARD, useClass: AuthGuard }] }).compile();
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
@@ -48,5 +49,13 @@ describe('Opportunities HTTP scope and intake', () => {
     await request(app.getHttpServer()).post('/opportunities/import').attach('file', Buffer.from('Title\nProperty'), 'source.csv').expect(401);
     await request(app.getHttpServer()).post('/opportunities/import').set('Authorization', 'Bearer COMMERCIAL').attach('file', Buffer.from('Title\nProperty'), 'source.csv').expect(400);
     await request(app.getHttpServer()).post('/opportunities/import').set('Authorization', 'Bearer COMMERCIAL').attach('file', Buffer.from('test'), 'source.txt').expect(400);
+  });
+  it('keeps direct email sync, pause and review routes behind application authentication', async () => {
+    await request(app.getHttpServer()).post('/opportunities/mail/sync').expect(401);
+    await request(app.getHttpServer()).patch('/opportunities/mail').send({ enabled: true }).expect(401);
+    await request(app.getHttpServer()).post('/opportunities/mail/sync').set('Authorization', 'Bearer QUALITY').expect(403);
+    await request(app.getHttpServer()).post('/opportunities/mail/sync').set('Authorization', 'Bearer COMMERCIAL').expect(201);
+    await request(app.getHttpServer()).patch('/opportunities/mail').set('Authorization', 'Bearer COMMERCIAL').send({ enabled: 'yes' }).expect(400);
+    await request(app.getHttpServer()).get('/opportunities/mail/review').set('Authorization', 'Bearer COMMERCIAL').expect(200);
   });
 });

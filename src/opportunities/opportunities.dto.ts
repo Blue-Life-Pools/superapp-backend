@@ -27,6 +27,12 @@ export class OpportunityInputDto {
   @IsOptional() @IsString() @MaxLength(100) invoiceTime?: string | null;
 }
 export class UpdateOpportunityDto extends PartialType(OpportunityInputDto) {}
+export class OpportunityMailSettingsDto {
+  @IsBoolean() enabled!: boolean;
+}
+export class LinkOpportunityEmailDto {
+  @IsString() @IsNotEmpty() @MaxLength(100) opportunityId!: string;
+}
 export class AutomationOpportunityDto extends OpportunityInputDto {
   @IsString() @IsNotEmpty() @MaxLength(1000) externalId!: string;
   @IsEmail() mailbox!: string;

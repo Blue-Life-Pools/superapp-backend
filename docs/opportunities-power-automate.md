@@ -1,5 +1,7 @@
 # Opportunities intake
 
+The current integration reads Microsoft 365 directly. Use [Direct Microsoft 365 intake](opportunities-mail-intake.md) for setup and operation. The Power Automate instructions below document only the optional legacy endpoint.
+
 The Opportunities table retains all 22 columns from the starting CSV. Input customer files are not committed. Commercial users can read, create, edit, import and export opportunities. Only Super Admin and Operations Director can delete; deletion is soft.
 
 ## Initial CSV

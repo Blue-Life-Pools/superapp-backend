@@ -97,6 +97,7 @@ model Opportunity {
   sourceMailbox        String?
   receivedAt           DateTime?
   sourceMetadata       Json?
+  emailReceipts        OpportunityEmailReceipt[]
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
@@ -106,6 +107,46 @@ model Opportunity {
   @@index([status])
   @@index([propertyId])
   @@index([estimateNumber])
+}
+
+model OpportunityMailConnection {
+  id                    String    @id @default("estimates")
+  mailbox               String
+  enabled               Boolean   @default(false)
+  lastScannedAt         DateTime?
+  nextLink              String?
+  scanThrough           DateTime?
+  lastSyncAt            DateTime?
+  lastScheduledSyncAt   DateTime?
+  lastError             String?
+  lastCreated           Int       @default(0)
+  lastLinked            Int       @default(0)
+  lastReview            Int       @default(0)
+  lockOwner             String?
+  lockUntil             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model OpportunityEmailReceipt {
+  id                String       @id @default(uuid())
+  mailbox           String
+  messageId         String
+  subject           String
+  receivedAt        DateTime
+  estimateNumber    String?
+  propertyName      String?
+  status            String
+  reason            String?
+  parsedFields      Json?
+  bodyText          String?
+  opportunityId     String?
+  opportunity       Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  createdAt         DateTime     @default(now())
+
+  @@unique([mailbox, messageId])
+  @@index([status, receivedAt])
+  @@index([opportunityId])
 }
 
 model QuickBooksConnection {
