@@ -118,6 +118,17 @@ model OpportunityMailConnection {
   scanThrough           DateTime?
   lastSyncAt            DateTime?
   lastScheduledSyncAt   DateTime?
+  subscriptionId        String?   @unique
+  subscriptionClientState String?
+  subscriptionExpiresAt DateTime?
+  subscriptionError     String?
+  subscriptionLockOwner String?
+  subscriptionLockUntil DateTime?
+  lastNotificationAt    DateTime?
+  lastNotificationProcessedAt DateTime?
+  lastMaintenanceAt     DateTime?
+  notificationError     String?
+  recoveryRequestedAt   DateTime?
   lastError             String?
   lastCreated           Int       @default(0)
   lastLinked            Int       @default(0)
@@ -147,6 +158,24 @@ model OpportunityEmailReceipt {
   @@unique([mailbox, messageId])
   @@index([status, receivedAt])
   @@index([opportunityId])
+}
+
+model OpportunityMailNotification {
+  id             String    @id @default(uuid())
+  eventKey       String    @unique
+  subscriptionId String
+  messageId      String?
+  lifecycleEvent String?
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  availableAt    DateTime  @default(now())
+  lockOwner      String?
+  lockUntil      DateTime?
+  lastError      String?
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([status, availableAt, createdAt])
 }
 
 model QuickBooksConnection {

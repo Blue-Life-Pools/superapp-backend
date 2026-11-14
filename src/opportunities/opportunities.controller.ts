@@ -4,15 +4,16 @@ import type { Response } from 'express';
 import { Public, Roles } from '../auth/auth.decorators';
 import { OpportunitiesService } from './opportunities.service';
 import { OpportunitiesMailService } from './opportunities-mail.service';
+import { OpportunitiesMailEventsService } from './opportunities-mail-events.service';
 import { AutomationOpportunityDto, LinkOpportunityEmailDto, OpportunityInputDto, OpportunityMailSettingsDto, OpportunityQueryDto, UpdateOpportunityDto } from './opportunities.dto';
 
 @Controller('opportunities')
 @Roles('COMMERCIAL')
 export class OpportunitiesController {
-  constructor(private readonly opportunities: OpportunitiesService, private readonly mail: OpportunitiesMailService) {}
+  constructor(private readonly opportunities: OpportunitiesService, private readonly mail: OpportunitiesMailService, private readonly events: OpportunitiesMailEventsService) {}
   @Get() list(@Query() query: OpportunityQueryDto) { return this.opportunities.list(query); }
   @Get('integration') integration() { return this.mail.status(); }
-  @Patch('mail') mailSettings(@Body() body: OpportunityMailSettingsDto) { return this.mail.setEnabled(body.enabled); }
+  @Patch('mail') mailSettings(@Body() body: OpportunityMailSettingsDto) { return this.events.setEnabled(body.enabled); }
   @Post('mail/sync') mailSync() { return this.mail.sync(); }
   @Get('mail/review') mailReview() { return this.mail.reviewMessages(); }
   @Post('mail/review/:id/link') linkMailReview(@Param('id') id: string, @Body() body: LinkOpportunityEmailDto) { return this.mail.linkReview(id, body.opportunityId); }

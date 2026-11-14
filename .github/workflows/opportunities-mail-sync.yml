@@ -1,7 +1,7 @@
 name: Opportunities email intake
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -24,8 +24,8 @@ jobs:
       - run: npx prisma generate
         env:
           DATABASE_URL: ${{ secrets.OPPORTUNITIES_DATABASE_URL }}
-      - name: Read estimates from Microsoft 365 into Opportunities
-        run: node scripts/sync-opportunities-mail.cjs --apply --scheduled
+      - name: Renew live email subscription and retry saved notifications
+        run: node scripts/sync-opportunities-mail.cjs --apply --maintain
         env:
           DATABASE_URL: ${{ secrets.OPPORTUNITIES_DATABASE_URL }}
           MICROSOFT_TENANT_ID: ${{ secrets.OPPORTUNITIES_MICROSOFT_TENANT_ID }}

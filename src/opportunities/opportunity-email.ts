@@ -12,6 +12,10 @@ export type EstimateMessage = {
   body?: { contentType?: string; content?: string };
 };
 export type EmailOpportunityFields = { propertyName?: string; estimateNumber: string; estimateAmount?: string; name?: string; creationDate: string; status: string };
+export function estimateNumberFromMessage(message: Pick<EstimateMessage, 'subject' | 'from'>) {
+  if (message.from?.emailAddress?.address?.toLowerCase() !== estimateSender) return null;
+  return message.subject?.trim().match(/^Estimate\s+#?\s*(\d+)\s+from\s+BLUE LIFE POOL SERVICE(?:\s*\||\s*$)/i)?.[1] || null;
+}
 const entities: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'" };
 export function emailText(body: EstimateMessage['body']) {
   let text = (body?.content || '').slice(0, 250000);
@@ -32,10 +36,8 @@ export function emailIdentity(message: EstimateMessage) {
   return createHash('sha256').update(opportunityMailbox + ':' + message.id).digest('hex');
 }
 export function parseEstimateEmail(message: EstimateMessage): { fields: EmailOpportunityFields; text: string; reason: string | null } | null {
-  if (message.from?.emailAddress?.address?.toLowerCase() !== estimateSender) return null;
-  const subject = message.subject?.trim() || '';
   // Replies, approvals, invoices and forwarded conversations are not new estimates.
-  const subjectNumber = subject.match(/^Estimate\s+#?\s*(\d+)\s+from\s+BLUE LIFE POOL SERVICE(?:\s*\||\s*$)/i)?.[1];
+  const subjectNumber = estimateNumberFromMessage(message);
   if (!subjectNumber) return null;
   const text = emailText(message.body), lines = text.split('\n');
   const fields: EmailOpportunityFields = { estimateNumber: subjectNumber, creationDate: receivedDay(message.receivedDateTime), status: 'Pending' };

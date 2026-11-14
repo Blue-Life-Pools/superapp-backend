@@ -86,4 +86,13 @@ describe('Mailbox sync persistence and recovery', () => {
     expect(rows).toHaveLength(1); expect(receipts[0]).toMatchObject({ status: 'IMPORTED', opportunityId: result.id });
     await expect(mail.resolveReview(id, input)).rejects.toThrow('no longer');
   });
+  it('retries a serialization conflict when notification and manual intake overlap', async () => {
+    db.$transaction.mockRejectedValueOnce({ code: 'P2034' });
+    expect(await mail.receiveNotification(estimateMessage())).toBe('IMPORTED');
+    expect(rows).toHaveLength(1); expect(receipts).toHaveLength(1);
+    expect(db.$transaction.mock.calls.at(-1)[1]).toMatchObject({ isolationLevel: 'Serializable' });
+    db.$transaction.mockRejectedValueOnce({ code: 'P2002' });
+    expect(await mail.receiveNotification(estimateMessage())).toBe('EXISTING');
+    expect(rows).toHaveLength(1);
+  });
 });

@@ -26,19 +26,22 @@ export class OpportunitiesMailService {
 
   private configured() { return ['MICROSOFT_TENANT_ID', 'MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'].every(key => Boolean(this.config.get<string>(key)?.trim())); }
   async status() {
-    const [connection, counts, latest] = await Promise.all([
+    const [connection, counts, latest, pending] = await Promise.all([
       this.prisma.opportunityMailConnection.findUnique({ where: { id: connectionId } }),
       this.prisma.opportunityEmailReceipt.groupBy({ by: ['status'], where: { mailbox: opportunityMailbox }, _count: { _all: true } }),
       this.prisma.opportunityEmailReceipt.findFirst({ where: { mailbox: opportunityMailbox }, orderBy: { receivedAt: 'desc' }, select: { receivedAt: true } }),
+      this.prisma.opportunityMailNotification.count({ where: { status: { not: 'DONE' } } }),
     ]);
     const count = (status: string) => counts.find(row => row.status === status)?._count._all || 0;
     return {
       provider: 'Microsoft 365', configured: this.configured(), mailbox: opportunityMailbox,
-      enabled: connection?.enabled || false, automatic: Boolean(connection?.enabled && connection.lastScheduledSyncAt),
+      enabled: connection?.enabled || false, automatic: Boolean(connection?.enabled && connection.subscriptionId && connection.subscriptionExpiresAt && connection.subscriptionExpiresAt > new Date() && !connection.subscriptionError),
+      trigger: 'EMAIL_RECEIVED', pendingNotifications: pending,
+      lastNotificationAt: connection?.lastNotificationAt || null, lastNotificationProcessedAt: connection?.lastNotificationProcessedAt || null,
       lastSyncAt: connection?.lastSyncAt || null, lastScheduledSyncAt: connection?.lastScheduledSyncAt || null,
-      lastReceivedAt: latest?.receivedAt || null, lastError: connection?.lastError || null,
+      lastReceivedAt: latest?.receivedAt || null, lastError: connection?.subscriptionError || connection?.notificationError || connection?.lastError || null,
       hasMore: Boolean(connection?.nextLink), imported: count('IMPORTED'), linked: count('LINKED'), review: count('NEEDS_REVIEW'),
-      schedule: 'Every 15 minutes',
+      schedule: 'When an email arrives',
     };
   }
   async setEnabled(enabled: boolean) {
@@ -139,7 +142,22 @@ export class OpportunitiesMailService {
       await this.prisma.opportunityMailConnection.updateMany({ where: { id: connectionId, lockOwner }, data: { lockOwner: null, lockUntil: null } });
     }
   }
+  async receiveNotification(message: EstimateMessage) {
+    const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });
+    return this.receive(message, buildPropertyMatches(properties));
+  }
   private async receive(message: EstimateMessage, match: ReturnType<typeof buildPropertyMatches>) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return await this.receiveOnce(message, match); }
+      catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code === 'P2002' && await this.prisma.opportunityEmailReceipt.findUnique({ where: { mailbox_messageId: identity(message.id) } })) return 'EXISTING';
+        if (code !== 'P2034' || attempt === 2) throw error;
+      }
+    }
+    throw new Error('Email transaction could not be completed.');
+  }
+  private async receiveOnce(message: EstimateMessage, match: ReturnType<typeof buildPropertyMatches>) {
     if (!message.id || !message.receivedDateTime) throw new Error('Missing Microsoft message identity.');
     const parsed = parseEstimateEmail(message);
     if (!parsed) return 'IGNORED';
@@ -159,6 +177,6 @@ export class OpportunitiesMailService {
       }
       await tx.opportunityEmailReceipt.create({ data: { ...key, subject: (message.subject || '').slice(0, 1000), receivedAt: new Date(message.receivedDateTime), estimateNumber: fields.estimateNumber, propertyName: fields.propertyName || null, status, reason, parsedFields: fields, bodyText: parsed.text.slice(0, 30000), opportunityId } });
       return status;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10000 });
   }
 }

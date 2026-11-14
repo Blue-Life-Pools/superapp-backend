@@ -3,5 +3,7 @@ import { OpportunitiesController } from './opportunities.controller';
 import { OpportunitiesService } from './opportunities.service';
 import { OpportunitiesMailService } from './opportunities-mail.service';
 import { MicrosoftGraphService } from '../microsoft-graph/microsoft-graph.service';
-@Module({ controllers: [OpportunitiesController], providers: [OpportunitiesService, OpportunitiesMailService, MicrosoftGraphService] })
+import { OpportunitiesMailEventsService } from './opportunities-mail-events.service';
+import { OpportunitiesMailWebhookController } from './opportunities-mail-webhook.controller';
+@Module({ controllers: [OpportunitiesController, OpportunitiesMailWebhookController], providers: [OpportunitiesService, OpportunitiesMailService, OpportunitiesMailEventsService, MicrosoftGraphService] })
 export class OpportunitiesModule {}

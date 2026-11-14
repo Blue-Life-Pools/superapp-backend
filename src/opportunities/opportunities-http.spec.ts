@@ -9,12 +9,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OpportunitiesController } from './opportunities.controller';
 import { OpportunitiesService } from './opportunities.service';
 import { OpportunitiesMailService } from './opportunities-mail.service';
+import { OpportunitiesMailEventsService } from './opportunities-mail-events.service';
 
 describe('Opportunities HTTP scope and intake', () => {
   let app: INestApplication, prisma: any;
   beforeAll(async () => {
     prisma = { opportunity: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue({ id: 'existing', propertyName: 'Property' }), findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'new' }), update: jest.fn().mockResolvedValue({ id: 'existing' }), upsert: jest.fn().mockResolvedValue({ id: 'intake' }) }, property: { findMany: jest.fn().mockResolvedValue([]) } };
-    const module = await Test.createTestingModule({ controllers: [OpportunitiesController], providers: [OpportunitiesService, { provide: OpportunitiesMailService, useValue: { status: async () => ({ provider: 'Microsoft 365', configured: true }), sync: async () => ({ created: 0 }), setEnabled: async () => ({ enabled: true }), reviewMessages: async () => [], resolveReview: async () => ({ id: 'reviewed' }) } }, { provide: PrismaService, useValue: prisma }, { provide: ConfigService, useValue: { get: () => 'test-intake-key' } }, { provide: AuthService, useValue: { session: async (header?: string) => { const role = header?.replace('Bearer ', ''); if (!role) throw new UnauthorizedException(); return { role }; } } }, { provide: APP_GUARD, useClass: AuthGuard }] }).compile();
+    const module = await Test.createTestingModule({ controllers: [OpportunitiesController], providers: [OpportunitiesService, { provide: OpportunitiesMailEventsService, useValue: { setEnabled: async () => ({ enabled: true }) } }, { provide: OpportunitiesMailService, useValue: { status: async () => ({ provider: 'Microsoft 365', configured: true }), sync: async () => ({ created: 0 }), reviewMessages: async () => [], resolveReview: async () => ({ id: 'reviewed' }) } }, { provide: PrismaService, useValue: prisma }, { provide: ConfigService, useValue: { get: () => 'test-intake-key' } }, { provide: AuthService, useValue: { session: async (header?: string) => { const role = header?.replace('Bearer ', ''); if (!role) throw new UnauthorizedException(); return { role }; } } }, { provide: APP_GUARD, useClass: AuthGuard }] }).compile();
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
