@@ -5,6 +5,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutomationOpportunityDto, OpportunityInputDto, OpportunityQueryDto, UpdateOpportunityDto } from './opportunities.dto';
 import { buildPropertyMatches, dateValue, normalizeOpportunity, opportunityFields, parseOpportunityCsv } from './opportunity-data';
+import { approvedOpportunityStatuses, buildApprovedOpportunityMap } from './opportunity-map';
 
 const select = { id: true, propertyId: true, propertyName: true, linkedPropertyName: true, estimateNumber: true, estimateAmount: true, status: true, categories: true, contractor: true, name: true, creationDate: true, requestedBy: true, approvalDate: true, approvedBy: true, estimatedRepairDate: true, inSkimmer: true, assignedTechnician: true, actualRepairDate: true, invoiceNumber: true, invoiceAmount: true, invoiceDate: true, approvalTime: true, repairTime: true, invoiceTime: true, source: true, sourceMailbox: true, receivedAt: true, updatedAt: true } satisfies Prisma.OpportunitySelect;
 const missing = '__NOT_RECORDED__';
@@ -55,6 +56,14 @@ export class OpportunitiesService {
     const item = await this.prisma.opportunity.findFirst({ where: { id, deletedAt: null }, select });
     if (!item) throw new NotFoundException('Opportunity not found.');
     return item;
+  }
+  async approvedMap(query: OpportunityQueryDto) {
+    const rows = await this.prisma.opportunity.findMany({
+      where: { AND: [this.where(query), { OR: approvedOpportunityStatuses.map(status => ({ status: { equals: status, mode: 'insensitive' as const } })) }] },
+      select: { id: true, propertyId: true, propertyName: true, linkedPropertyName: true, estimateNumber: true, estimateAmount: true, status: true, name: true, creationDate: true, approvalDate: true, property: { select: { id: true, name: true, addressLine1: true, city: true, state: true, zipCode: true, formattedAddress: true, latitude: true, longitude: true, deletedAt: true } } },
+      orderBy: [{ propertyName: 'asc' }, { creationDate: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+    });
+    return buildApprovedOpportunityMap(rows);
   }
   private async matchProperty(data: Record<string, unknown>) {
     const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });

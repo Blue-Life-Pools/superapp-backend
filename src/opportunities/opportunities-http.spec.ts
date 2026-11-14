@@ -59,4 +59,10 @@ describe('Opportunities HTTP scope and intake', () => {
     await request(app.getHttpServer()).patch('/opportunities/mail').set('Authorization', 'Bearer COMMERCIAL').send({ enabled: 'yes' }).expect(400);
     await request(app.getHttpServer()).get('/opportunities/mail/review').set('Authorization', 'Bearer COMMERCIAL').expect(200);
   });
+  it('protects the approved map with the same Commercial access and validates its filters', async () => {
+    await request(app.getHttpServer()).get('/opportunities/approved-map').expect(401);
+    await request(app.getHttpServer()).get('/opportunities/approved-map').set('Authorization', 'Bearer QUALITY').expect(403);
+    for (const role of ['COMMERCIAL', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities/approved-map').set('Authorization', `Bearer ${role}`).expect(200);
+    await request(app.getHttpServer()).get('/opportunities/approved-map?from=bad').set('Authorization', 'Bearer COMMERCIAL').expect(400);
+  });
 });

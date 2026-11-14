@@ -13,6 +13,7 @@ export class OpportunitiesController {
   constructor(private readonly opportunities: OpportunitiesService, private readonly mail: OpportunitiesMailService, private readonly events: OpportunitiesMailEventsService) {}
   @Get() list(@Query() query: OpportunityQueryDto) { return this.opportunities.list(query); }
   @Get('integration') integration() { return this.mail.status(); }
+  @Get('approved-map') approvedMap(@Query() query: OpportunityQueryDto) { return this.opportunities.approvedMap(query); }
   @Patch('mail') mailSettings(@Body() body: OpportunityMailSettingsDto) { return this.events.setEnabled(body.enabled); }
   @Post('mail/sync') mailSync() { return this.mail.sync(); }
   @Get('mail/review') mailReview() { return this.mail.reviewMessages(); }
