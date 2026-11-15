@@ -5,10 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { MicrosoftGraphService } from '../microsoft-graph/microsoft-graph.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildPropertyMatches, normalizeOpportunity, propertyKey } from './opportunity-data';
-import { emailIdentity, estimateSender, opportunityMailbox, parseEstimateEmail, type EstimateMessage } from './opportunity-email';
+import { emailIdentity, estimateSender, opportunityMailbox, parseEstimateEmail, type EmailOpportunityFields, type EstimateMessage } from './opportunity-email';
+import { readEstimatePdf } from './opportunity-estimate-pdf';
 import { OpportunityInputDto } from './opportunities.dto';
 
 type MessagePage = { value: EstimateMessage[]; '@odata.nextLink'?: string };
+type EstimateAttachment = { id: string; name?: string; contentType?: string; size?: number; isInline?: boolean; contentBytes?: string; '@odata.type'?: string };
 const connectionId = 'estimates';
 const identity = (messageId: string) => ({ mailbox: opportunityMailbox, messageId });
 const safeError = (error: unknown) => {
@@ -146,9 +148,46 @@ export class OpportunitiesMailService {
     const properties = await this.prisma.property.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });
     return this.receive(message, buildPropertyMatches(properties));
   }
+  private async attachmentName(message: EstimateMessage, fields: EmailOpportunityFields): Promise<string | undefined> {
+    const base = `/users/${encodeURIComponent(opportunityMailbox)}/messages/${encodeURIComponent(message.id)}/attachments`;
+    const headers = { Prefer: 'IdType="ImmutableId"' };
+    const listing = await this.graph.request<{ value: EstimateAttachment[] }>(`${base}?$select=id,name,contentType,size,isInline`, { headers, signal: AbortSignal.timeout(15000) });
+    const pdfs = (listing.value || []).filter(file => file.id && !file.isInline && (file.contentType?.toLowerCase() === 'application/pdf' || /\.pdf$/i.test(file.name || '')));
+    const numbered = pdfs.filter(file => new RegExp(`(?:^|\\D)${fields.estimateNumber}(?:\\D|$)`).test(file.name || ''));
+    const matching = numbered.length ? numbered : pdfs.filter(file => /^estimate(?:\b|_)/i.test(file.name || ''));
+    if (!matching.length) return undefined;
+    if (matching.length !== 1 || (matching[0].size || 0) > 5 * 1024 * 1024) throw new Error('Estimate attachment needs review before its descriptions can be read.');
+    const attachment = await this.graph.request<EstimateAttachment>(`${base}/${encodeURIComponent(matching[0].id)}`, { headers, signal: AbortSignal.timeout(15000) });
+    if (!attachment.contentBytes || attachment.contentBytes.length > 7 * 1024 * 1024) throw new Error('Estimate PDF contents could not be read.');
+    const details = await readEstimatePdf(Buffer.from(attachment.contentBytes, 'base64'), fields.estimateNumber);
+    if (!details || fields.estimateAmount === undefined || details.total !== fields.estimateAmount) throw new Error('Estimate PDF number, total or descriptions could not be verified.');
+    return details.descriptions.join(' · ').slice(0, 30000);
+  }
+  private async fillMissingName(message: EstimateMessage, receipt: { id: string; status: string; opportunityId: string | null; parsedFields: Prisma.JsonValue | null }, fields: EmailOpportunityFields) {
+    if (receipt.status !== 'IMPORTED' || !receipt.opportunityId) return;
+    const row = await this.prisma.opportunity.findFirst({ where: { id: receipt.opportunityId, deletedAt: null, source: 'MICROSOFT_365' }, select: { id: true, name: true } });
+    if (!row || row.name?.trim()) return;
+    const name = fields.name || await this.attachmentName(message, fields);
+    if (!name) return;
+    // Only fill a missing imported name. Status, amounts and user-written names
+    // remain protected when a notification is delivered again.
+    await this.prisma.$transaction(async tx => {
+      const changed = await tx.opportunity.updateMany({ where: { id: row.id, deletedAt: null, source: 'MICROSOFT_365', OR: [{ name: null }, { name: '' }] }, data: { name } });
+      if (changed.count) {
+        const previous = receipt.parsedFields && typeof receipt.parsedFields === 'object' && !Array.isArray(receipt.parsedFields) ? receipt.parsedFields : {};
+        await tx.opportunityEmailReceipt.update({ where: { id: receipt.id }, data: { parsedFields: { ...previous, name } } });
+      }
+    });
+  }
   private async receive(message: EstimateMessage, match: ReturnType<typeof buildPropertyMatches>) {
+    if (!message.id || !message.receivedDateTime) throw new Error('Missing Microsoft message identity.');
+    const parsed = parseEstimateEmail(message);
+    if (!parsed) return 'IGNORED';
+    const existing = await this.prisma.opportunityEmailReceipt.findUnique({ where: { mailbox_messageId: identity(message.id) } });
+    if (existing) { if (!parsed.reason) await this.fillMissingName(message, existing, parsed.fields); return 'EXISTING'; }
+    if (!parsed.reason && !parsed.fields.name) parsed.fields.name = await this.attachmentName(message, parsed.fields);
     for (let attempt = 0; attempt < 3; attempt++) {
-      try { return await this.receiveOnce(message, match); }
+      try { return await this.receiveOnce(message, match, parsed); }
       catch (error) {
         const code = (error as { code?: string }).code;
         if (code === 'P2002' && await this.prisma.opportunityEmailReceipt.findUnique({ where: { mailbox_messageId: identity(message.id) } })) return 'EXISTING';
@@ -157,10 +196,7 @@ export class OpportunitiesMailService {
     }
     throw new Error('Email transaction could not be completed.');
   }
-  private async receiveOnce(message: EstimateMessage, match: ReturnType<typeof buildPropertyMatches>) {
-    if (!message.id || !message.receivedDateTime) throw new Error('Missing Microsoft message identity.');
-    const parsed = parseEstimateEmail(message);
-    if (!parsed) return 'IGNORED';
+  private async receiveOnce(message: EstimateMessage, match: ReturnType<typeof buildPropertyMatches>, parsed: NonNullable<ReturnType<typeof parseEstimateEmail>>) {
     return this.prisma.$transaction(async tx => {
       const key = identity(message.id);
       if (await tx.opportunityEmailReceipt.findUnique({ where: { mailbox_messageId: key } })) return 'EXISTING';

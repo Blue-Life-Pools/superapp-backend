@@ -1,5 +1,6 @@
 import { OpportunitiesMailService } from './opportunities-mail.service';
 import { estimateMessage } from './opportunity-email.fixture';
+import * as estimatePdf from './opportunity-estimate-pdf';
 
 describe('Mailbox sync persistence and recovery', () => {
   let db: any, graph: any, state: any, mail: OpportunitiesMailService, receipts: any[], rows: any[];
@@ -17,9 +18,10 @@ describe('Mailbox sync persistence and recovery', () => {
       },
       property: { findMany: jest.fn().mockResolvedValue([{ id: 'property', name: 'Example Apartments' }]) },
       opportunity: {
-        findFirst: jest.fn().mockResolvedValue({ creationDate: new Date('2026-11-13T00:00:00Z') }),
+        findFirst: jest.fn(async ({ where }) => where.id ? rows.find(row => row.id === where.id && !row.deletedAt && row.source === 'MICROSOFT_365') || null : { creationDate: new Date('2026-11-13T00:00:00Z') }),
         findMany: jest.fn(async ({ where }) => rows.filter(row => typeof where.estimateNumber === 'string' ? row.estimateNumber === where.estimateNumber : where.estimateNumber.in.includes(row.estimateNumber))),
         create: jest.fn(async ({ data }) => { const row = { id: `new-${rows.length}`, ...data }; rows.push(row); return row; }),
+        updateMany: jest.fn(async ({ where, data }) => { const row = rows.find(row => row.id === where.id && !row.deletedAt && row.source === where.source && (row.name == null || row.name === '')); if (!row) return { count: 0 }; Object.assign(row, data); return { count: 1 }; }),
       },
       opportunityEmailReceipt: {
         findUnique: jest.fn(async ({ where }) => receipts.find(row => where.id ? row.id === where.id : row.mailbox === where.mailbox_messageId?.mailbox && row.messageId === where.mailbox_messageId?.messageId) || null),
@@ -33,6 +35,7 @@ describe('Mailbox sync persistence and recovery', () => {
     graph = { request: jest.fn().mockResolvedValue({ value: [estimateMessage()] }) };
     mail = new OpportunitiesMailService(db, graph, { get: (key: string) => key.startsWith('MICROSOFT_') ? 'configured-test-value' : undefined } as any);
   });
+  afterEach(() => jest.restoreAllMocks());
   it('creates an opportunity and receipt atomically, and repeat sync does not overwrite edits', async () => {
     expect(await mail.sync('scheduled', 2, now)).toMatchObject({ created: 1, hasMore: false });
     expect(rows[0]).toMatchObject({ source: 'MICROSOFT_365', propertyId: 'property', estimateAmount: '1250.00', creationDate: new Date('2026-11-13'), receivedAt: new Date('2026-11-14T02:00:00Z') });
@@ -53,6 +56,35 @@ describe('Mailbox sync persistence and recovery', () => {
     expect(receipts[0]).toMatchObject({ status: 'IMPORTED', reason: null, opportunityId: rows[0].id });
     expect(await mail.receiveNotification(message)).toBe('EXISTING');
     expect(rows).toHaveLength(1); expect(receipts).toHaveLength(1);
+  });
+  it('reads every description from the matching PDF when the original email only contains a summary', async () => {
+    const reader = jest.spyOn(estimatePdf, 'readEstimatePdf').mockResolvedValue({ estimateNumber: '7400', total: '2842.00', descriptions: ['POOL: REPLACE FILTER', 'POOL OR SPA: FULL ACID WASH', 'INSTALLATION'] });
+    const message = estimateMessage({ body: { content: 'Your estimate is ready!\n$2,842.00\nExample Apartments,\nPlease review the estimate below.\nReview and approve' } });
+    graph.request.mockResolvedValueOnce({ value: [{ id: 'invoice', name: 'Invoice_7400.pdf', contentType: 'application/pdf', isInline: true }, { id: 'pdf', name: 'Estimate_7400.pdf', contentType: 'application/pdf', size: 120000 }] }).mockResolvedValueOnce({ contentBytes: Buffer.from('%PDF-fixture').toString('base64') });
+    expect(await mail.receiveNotification(message)).toBe('IMPORTED');
+    expect(rows[0].name).toBe('POOL: REPLACE FILTER · POOL OR SPA: FULL ACID WASH · INSTALLATION');
+    expect(receipts[0].parsedFields.name).toBe(rows[0].name);
+    expect(reader).toHaveBeenCalledWith(expect.any(Buffer), '7400');
+    const calls = graph.request.mock.calls.length;
+    expect(await mail.receiveNotification(message)).toBe('EXISTING');
+    expect(graph.request.mock.calls.length).toBe(calls); expect(rows).toHaveLength(1);
+  });
+  it('fills a missing imported name on redelivery without altering amounts, status or a later user edit', async () => {
+    const message = estimateMessage();
+    await mail.receiveNotification(message);
+    rows[0].name = null; rows[0].status = 'Accepted'; rows[0].estimateAmount = '999.00';
+    expect(await mail.receiveNotification(message)).toBe('EXISTING');
+    expect(rows[0]).toMatchObject({ name: 'POOL: REPLACE MOTOR · INSTALL MOTOR', status: 'Accepted', estimateAmount: '999.00' });
+    rows[0].name = 'User-written title';
+    expect(await mail.receiveNotification(message)).toBe('EXISTING');
+    expect(rows[0].name).toBe('User-written title'); expect(rows).toHaveLength(1);
+  });
+  it('retains the email for retry instead of storing descriptions from a different or mismatched PDF', async () => {
+    const reader = jest.spyOn(estimatePdf, 'readEstimatePdf').mockResolvedValue({ estimateNumber: '7400', total: '1.00', descriptions: ['Wrong total'] });
+    const message = estimateMessage({ body: { content: 'Your estimate is ready!\n$2,842.00\nExample Apartments,\nPlease review the estimate below.\nReview and approve' } });
+    graph.request.mockResolvedValueOnce({ value: [{ id: 'pdf', name: 'Estimate_7400.pdf', contentType: 'application/pdf' }] }).mockResolvedValueOnce({ contentBytes: Buffer.from('%PDF-fixture').toString('base64') });
+    await expect(mail.receiveNotification(message)).rejects.toThrow('could not be verified');
+    expect(reader).toHaveBeenCalled(); expect(rows).toHaveLength(0); expect(receipts).toHaveLength(0);
   });
   it('does not guess among duplicate CSV records or resurrect a deleted row', async () => {
     rows.push({ id: 'first', estimateNumber: '7400', propertyName: 'Example Apartments' }, { id: 'second', estimateNumber: '7400', propertyName: 'Example Apartments' });
