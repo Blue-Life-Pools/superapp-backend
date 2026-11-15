@@ -10,6 +10,16 @@ describe('Direct estimate email extraction', () => {
     expect(parseEstimateEmail(estimateMessage({ body }))?.fields).toMatchObject({ propertyName: 'Example & Partners', estimateAmount: '0.00' });
     expect(emailText(body)).not.toMatch(/run|secret/);
   });
+  it('reads summary-only QuickBooks totals when financing text separates the amount and review button', () => {
+    const body = { contentType: 'text', content: 'Your estimate is ready!\n$2,842.00\nPay over time on your future invoice with [Affirm]. See if you qualify\nExample Apartments,\nPlease review the estimate below.\nWe look forward to working with you.\nReview and approve' };
+    expect(parseEstimateEmail(estimateMessage({ body }))).toMatchObject({ fields: { estimateNumber: '7400', propertyName: 'Example Apartments', estimateAmount: '2842.00', status: 'Pending', creationDate: '2026-11-13' }, reason: null });
+    const zero = { contentType: 'html', content: '<h1>Your estimate is ready!</h1><p>$0.00</p><p>Pay over time from $20.00 a month.</p><p>Example Apartments,</p><p>Please review the estimate below.</p><p>Review and approve</p>' };
+    expect(parseEstimateEmail(estimateMessage({ body: zero }))?.fields.estimateAmount).toBe('0.00');
+  });
+  it('does not mistake an isolated line-item or financing amount for a missing estimate total', () => {
+    const content = 'Example Apartments,\nPlease review the estimate below.\nPay over time from $20.00 a month.\n$25.00\nReplacement part\n1 x $25.00\nReview and approve';
+    expect(parseEstimateEmail(estimateMessage({ body: { content } }))).toMatchObject({ reason: 'The estimate total could not be identified in this email.' });
+  });
   it('excludes replies, approvals, invoices and unrelated senders', () => {
     for (const subject of ['Re: Estimate 7400 from BLUE LIFE POOL SERVICE', 'FW: Estimate #7400 approved', 'Invoice 7400 from BLUE LIFE POOL SERVICE', 'Estimate 7400 from Another Company']) expect(parseEstimateEmail(estimateMessage({ subject }))).toBeNull();
     expect(parseEstimateEmail(estimateMessage({ from: { emailAddress: { address: 'unrelated@example.test' } } }))).toBeNull();

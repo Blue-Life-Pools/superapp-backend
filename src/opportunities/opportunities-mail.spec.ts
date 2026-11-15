@@ -46,6 +46,14 @@ describe('Mailbox sync persistence and recovery', () => {
     expect(await mail.sync('manual', 2, now)).toMatchObject({ created: 0, linked: 1 });
     expect(receipts[0]).toMatchObject({ status: 'LINKED', opportunityId: 'csv' }); expect(rows).toHaveLength(1); expect(rows[0].status).toBe('Converted'); expect(rows[0].estimateAmount).toBe('950.00');
   });
+  it('automatically imports a summary-only notification once despite financing copy before its review button', async () => {
+    const message = estimateMessage({ body: { content: 'Your estimate is ready!\n$2,842.00\nPay over time with Affirm. See if you qualify.\nExample Apartments,\nPlease review the estimate below.\nReview and approve' } });
+    expect(await mail.receiveNotification(message)).toBe('IMPORTED');
+    expect(rows[0]).toMatchObject({ estimateNumber: '7400', propertyId: 'property', estimateAmount: '2842.00', status: 'Pending', source: 'MICROSOFT_365' });
+    expect(receipts[0]).toMatchObject({ status: 'IMPORTED', reason: null, opportunityId: rows[0].id });
+    expect(await mail.receiveNotification(message)).toBe('EXISTING');
+    expect(rows).toHaveLength(1); expect(receipts).toHaveLength(1);
+  });
   it('does not guess among duplicate CSV records or resurrect a deleted row', async () => {
     rows.push({ id: 'first', estimateNumber: '7400', propertyName: 'Example Apartments' }, { id: 'second', estimateNumber: '7400', propertyName: 'Example Apartments' });
     expect(await mail.sync('manual', 2, now)).toMatchObject({ review: 1, created: 0 }); expect(receipts[0].reason).toContain('Several');

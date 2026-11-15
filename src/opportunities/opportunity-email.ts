@@ -52,7 +52,11 @@ export function parseEstimateEmail(message: EstimateMessage): { fields: EmailOpp
   const total = totals.at(-1)?.[1];
   // Some QuickBooks templates put only the grand total above "Review and approve".
   const headingTotal = text.match(/(?:^|\n)\$\s*([\d,]+(?:\.\d{2})?)\s*\nReview and approve\b/i)?.[1];
-  if (total || headingTotal) fields.estimateAmount = moneyValue(total || headingTotal)!;
+  // Summary-only templates identify the amount by this heading. Financing copy
+  // may separate it from the review button, so proximity to that button is unsafe.
+  const readyTotal = text.match(/(?:^|\n)Your estimate is ready[!.]?\s*\n\$\s*([\d,]+(?:\.\d{2})?)\s*(?=\n|$)/i)?.[1];
+  const displayedTotal = total || headingTotal || readyTotal;
+  if (displayedTotal) fields.estimateAmount = moneyValue(displayedTotal)!;
   const subtotal = lines.findIndex(line => /^Subtotal\b/i.test(line));
   const details = subtotal > -1 ? lines.slice(0, subtotal).flatMap((line, index) => {
     if (!/^\$[\d,.]+$/.test(line)) return [];
