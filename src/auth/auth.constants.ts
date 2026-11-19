@@ -15,5 +15,6 @@ export function allowedAreas(role: AppRole) {
     return ['home', 'reports', 'quality'] as const;
   }
   if (role === 'COMMERCIAL') return ['home', 'commercial', 'opportunities'] as const;
+  if (role === 'CHEMICALS') return ['home', 'commercial', 'chemicals'] as const;
   return ['home', role.toLowerCase()] as const;
 }
