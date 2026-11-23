@@ -15,10 +15,29 @@ describe('Opportunities HTTP scope and intake', () => {
   let app: INestApplication, prisma: any;
   beforeAll(async () => {
     prisma = { opportunity: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]), groupBy: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue({ id: 'existing', propertyName: 'Property' }), findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'new' }), update: jest.fn().mockResolvedValue({ id: 'existing' }), upsert: jest.fn().mockResolvedValue({ id: 'intake' }) }, property: { findMany: jest.fn().mockResolvedValue([]) } };
+    prisma.opportunity.updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const module = await Test.createTestingModule({ controllers: [OpportunitiesController], providers: [OpportunitiesService, { provide: OpportunitiesMailEventsService, useValue: { setEnabled: async () => ({ enabled: true }) } }, { provide: OpportunitiesMailService, useValue: { status: async () => ({ provider: 'Microsoft 365', configured: true }), sync: async () => ({ created: 0 }), reviewMessages: async () => [], resolveReview: async () => ({ id: 'reviewed' }) } }, { provide: PrismaService, useValue: prisma }, { provide: ConfigService, useValue: { get: () => 'test-intake-key' } }, { provide: AuthService, useValue: { session: async (header?: string) => { const role = header?.replace('Bearer ', ''); if (!role) throw new UnauthorizedException(); return { role }; } } }, { provide: APP_GUARD, useClass: AuthGuard }] }).compile();
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
+  it('lists repairs without an invoice and only lets existing editors record it atomically', async () => {
+    const http = request(app.getHttpServer());
+    const path = '/opportunities/existing/invoice';
+    const invoice = { invoiceNumber: 'INV-001', invoiceAmount: '150.25', invoiceDate: '2026-11-20' };
+    const ready = { deletedAt: null, status: { equals: 'Repair Done', mode: 'insensitive' }, OR: [{ invoiceNumber: null }, { invoiceNumber: '' }] };
+    await http.get('/opportunities/pending-invoices').expect(401);
+    await http.get('/opportunities/pending-invoices').set('Authorization', 'Bearer REPORTS').expect(200);
+    expect(prisma.opportunity.findMany.mock.calls.at(-1)[0].where).toEqual(ready);
+    await http.patch(path).set('Authorization', 'Bearer REPORTS').send(invoice).expect(403);
+    await http.patch(path).set('Authorization', 'Bearer COMMERCIAL').send({ ...invoice, invoiceDate: '2026-11-31' }).expect(400);
+    await http.patch(path).set('Authorization', 'Bearer COMMERCIAL').send(invoice).expect(200, { id: 'existing' });
+    expect(prisma.opportunity.updateMany).toHaveBeenLastCalledWith({
+      where: { id: 'existing', ...ready },
+      data: { ...invoice, invoiceDate: new Date('2026-11-20T00:00:00Z'), status: 'Converted' },
+    });
+    prisma.opportunity.updateMany.mockResolvedValueOnce({ count: 0 });
+    await http.patch(path).set('Authorization', 'Bearer COMMERCIAL').send(invoice).expect(409);
+  });
   it('allows Commercial, Reports and administrators to read the list, while rejecting unrelated areas and anonymous requests', async () => {
     await request(app.getHttpServer()).get('/opportunities').expect(401);
     for (const role of ['COMMERCIAL', 'REPORTS', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities').set('Authorization', `Bearer ${role}`).expect(200);

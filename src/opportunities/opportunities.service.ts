@@ -1,14 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AutomationOpportunityDto, OpportunityInputDto, OpportunityQueryDto, UpdateOpportunityDto } from './opportunities.dto';
+import { AutomationOpportunityDto, OpportunityInputDto, OpportunityQueryDto, RecordOpportunityInvoiceDto, UpdateOpportunityDto } from './opportunities.dto';
 import { buildPropertyMatches, dateValue, normalizeOpportunity, opportunityFields, parseOpportunityCsv } from './opportunity-data';
 import { approvedOpportunityStatuses, buildApprovedOpportunityMap } from './opportunity-map';
 
 const select = { id: true, propertyId: true, propertyName: true, linkedPropertyName: true, estimateNumber: true, estimateAmount: true, status: true, categories: true, contractor: true, name: true, creationDate: true, requestedBy: true, approvalDate: true, approvedBy: true, estimatedRepairDate: true, inSkimmer: true, assignedTechnician: true, actualRepairDate: true, invoiceNumber: true, invoiceAmount: true, invoiceDate: true, approvalTime: true, repairTime: true, invoiceTime: true, source: true, sourceMailbox: true, receivedAt: true, updatedAt: true } satisfies Prisma.OpportunitySelect;
 const missing = '__NOT_RECORDED__';
+const readyForInvoice = {
+  deletedAt: null,
+  status: { equals: 'Repair Done', mode: 'insensitive' },
+  OR: [{ invoiceNumber: null }, { invoiceNumber: '' }],
+} satisfies Prisma.OpportunityWhereInput;
 const filterText = (value?: string) => value === missing ? null : value;
 const csvLabels = ['Property', 'Linked property', 'Estimate number', 'Estimate amount', 'Status', 'Categories', 'Contractor', 'Opportunity name', 'Created / received date', 'Requested by', 'Approval date', 'Approved by', 'Estimated repair date', 'Skimmer', 'Assigned technician', 'Actual repair date', 'Invoice number', 'Invoice amount', 'Invoice date', 'Time to approve', 'Time to repair', 'Time to invoice'];
 
@@ -56,6 +61,22 @@ export class OpportunitiesService {
     const item = await this.prisma.opportunity.findFirst({ where: { id, deletedAt: null }, select });
     if (!item) throw new NotFoundException('Opportunity not found.');
     return item;
+  }
+  pendingInvoices() {
+    return this.prisma.opportunity.findMany({
+      where: readyForInvoice,
+      select: { id: true, propertyName: true, name: true, estimateNumber: true, estimateAmount: true, actualRepairDate: true, invoiceAmount: true, invoiceDate: true },
+      orderBy: [{ actualRepairDate: { sort: 'asc', nulls: 'last' } }, { creationDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
+    });
+  }
+  async recordInvoice(id: string, input: RecordOpportunityInvoiceDto) {
+    const data = this.normalize(input) as Prisma.OpportunityUpdateManyMutationInput;
+    const result = await this.prisma.opportunity.updateMany({
+      where: { id, ...readyForInvoice },
+      data: { ...data, status: 'Converted' },
+    });
+    if (!result.count) throw new ConflictException('This opportunity is no longer ready to invoice. Refresh the list.');
+    return { id };
   }
   async approvedMap(query: OpportunityQueryDto) {
     const rows = await this.prisma.opportunity.findMany({

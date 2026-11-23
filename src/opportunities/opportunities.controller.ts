@@ -5,7 +5,7 @@ import { Public, Roles } from '../auth/auth.decorators';
 import { OpportunitiesService } from './opportunities.service';
 import { OpportunitiesMailService } from './opportunities-mail.service';
 import { OpportunitiesMailEventsService } from './opportunities-mail-events.service';
-import { AutomationOpportunityDto, LinkOpportunityEmailDto, OpportunityInputDto, OpportunityMailSettingsDto, OpportunityQueryDto, UpdateOpportunityDto, UpdateOpportunityStatusDto } from './opportunities.dto';
+import { AutomationOpportunityDto, LinkOpportunityEmailDto, OpportunityInputDto, OpportunityMailSettingsDto, OpportunityQueryDto, RecordOpportunityInvoiceDto, UpdateOpportunityDto, UpdateOpportunityStatusDto } from './opportunities.dto';
 
 @Controller('opportunities')
 @Roles('COMMERCIAL')
@@ -14,6 +14,7 @@ export class OpportunitiesController {
   @Get() @Roles('COMMERCIAL', 'REPORTS') list(@Query() query: OpportunityQueryDto) { return this.opportunities.list(query); }
   @Get('integration') integration() { return this.mail.status(); }
   @Get('approved-map') @Roles('COMMERCIAL', 'REPORTS') approvedMap(@Query() query: OpportunityQueryDto) { return this.opportunities.approvedMap(query); }
+  @Get('pending-invoices') @Roles('COMMERCIAL', 'REPORTS') pendingInvoices() { return this.opportunities.pendingInvoices(); }
   @Patch('mail') mailSettings(@Body() body: OpportunityMailSettingsDto) { return this.events.setEnabled(body.enabled); }
   @Post('mail/sync') mailSync() { return this.mail.sync(); }
   @Get('mail/review') mailReview() { return this.mail.reviewMessages(); }
@@ -32,6 +33,9 @@ export class OpportunitiesController {
   @Post('automation') @Public() automation(@Body() body: AutomationOpportunityDto, @Headers('x-opportunities-key') key?: string) { return this.opportunities.ingest(body, key); }
   @Get(':id') @Roles('COMMERCIAL', 'REPORTS') detail(@Param('id') id: string) { return this.opportunities.detail(id); }
   @Post() create(@Body() body: OpportunityInputDto) { return this.opportunities.create(body); }
+  @Patch(':id/invoice') recordInvoice(@Param('id') id: string, @Body() body: RecordOpportunityInvoiceDto) {
+    return this.opportunities.recordInvoice(id, body);
+  }
   @Patch(':id/status') @Roles('COMMERCIAL', 'REPORTS')
   updateStatus(@Param('id') id: string, @Body() body: UpdateOpportunityStatusDto) {
     return this.opportunities.update(id, { status: body.status });
