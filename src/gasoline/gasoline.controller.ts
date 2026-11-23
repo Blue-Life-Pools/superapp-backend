@@ -4,7 +4,6 @@ import { GasolineRouteDto, ImportGasolineDto } from './gasoline.dto';
 import { GasolineService } from './gasoline.service';
 
 @Controller('gasoline')
-@Roles('REPORTS')
 export class GasolineController {
   constructor(private readonly gasoline: GasolineService) {}
 
@@ -24,11 +23,13 @@ export class GasolineController {
   }
 
   @Post('import')
+  @Roles('REPORTS')
   importReport(@Body() data: ImportGasolineDto) {
     return this.gasoline.importReport(data);
   }
 
   @Put('route')
+  @Roles('REPORTS')
   saveRoute(@Body() data: GasolineRouteDto) {
     return this.gasoline.saveRoute(data);
   }

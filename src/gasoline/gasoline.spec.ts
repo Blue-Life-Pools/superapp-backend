@@ -1,6 +1,7 @@
 import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { allowedAreas, APP_ROLES } from '../auth/auth.constants';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,7 +32,8 @@ describe('Shared gasoline history', () => {
         { provide: AuthService, useValue: { session: (token: string) => {
           if (token === 'Bearer uploader') return { id: 'uploader', role: 'OPERATIONS_DIRECTOR' };
           if (token === 'Bearer reviewer') return { id: 'reviewer', role: 'REPORTS' };
-          if (token === 'Bearer other') return { id: 'other', role: 'COMMERCIAL' };
+          const role = APP_ROLES.find(item => token === 'Bearer ' + item);
+          if (role) return { id: role, role };
           throw new UnauthorizedException('Login required');
         } } },
         { provide: PrismaService, useValue: {
@@ -75,7 +77,6 @@ describe('Shared gasoline history', () => {
   it('shares data across authorized accounts and keeps existing routes during browser imports', async () => {
     const http = request(app.getHttpServer());
     await http.get('/gasoline').expect(401);
-    await http.get('/gasoline').set('Authorization', 'Bearer other').expect(403);
     await http.post('/gasoline/import').set('Authorization', 'Bearer uploader').send({ purchases: [purchase], routes: [route] })
       .expect(201, { newPurchases: 1, newRoutes: 1 });
     await http.put('/gasoline/route').set('Authorization', 'Bearer reviewer').send({ ...route, properties: 6 }).expect(200);
@@ -88,9 +89,23 @@ describe('Shared gasoline history', () => {
     });
   });
 
+  it.each(APP_ROLES)('makes Gasoline readable to the %s profile', async role => {
+    const http = request(app.getHttpServer());
+    expect(allowedAreas(role)).toContain('gasoline');
+    await http.get('/gasoline').set('Authorization', 'Bearer ' + role).expect(200);
+    await http.get('/gasoline/chemical-properties?month=2026-11').set('Authorization', 'Bearer ' + role).expect(200);
+    await http.get('/gasoline/archived-properties?month=2025-01').set('Authorization', 'Bearer ' + role).expect(200);
+  });
+
+  it.each(['COMMERCIAL', 'CHEMICALS', 'HEALTH', 'QUALITY'])('keeps data changes restricted for the %s profile', async role => {
+    const http = request(app.getHttpServer());
+    await http.post('/gasoline/import').set('Authorization', 'Bearer ' + role).send({ purchases: [purchase] }).expect(403);
+    await http.put('/gasoline/route').set('Authorization', 'Bearer ' + role).send(route).expect(403);
+  });
+
   it('loads archived property records only through the authorized Gasoline route', async () => {
     const http = request(app.getHttpServer());
-    await http.get('/gasoline/archived-properties?month=2025-01').set('Authorization', 'Bearer other').expect(403);
+    await http.get('/gasoline/archived-properties?month=2025-01').expect(401);
     await http.get('/gasoline/archived-properties?month=2025-99').set('Authorization', 'Bearer reviewer').expect(400);
     await http.get('/gasoline/archived-properties?month=2025-01').set('Authorization', 'Bearer reviewer')
       .expect(200, [{ name: 'Archived Pool', address: '123 Main St' }]);
@@ -104,7 +119,7 @@ describe('Shared gasoline history', () => {
 
   it('returns only authorized, month-scoped property assignments and distinct service dates', async () => {
     const http = request(app.getHttpServer());
-    await http.get('/gasoline/chemical-properties?month=2026-11').set('Authorization', 'Bearer other').expect(403);
+    await http.get('/gasoline/chemical-properties?month=2026-11').expect(401);
     await http.get('/gasoline/chemical-properties?month=2026-99').set('Authorization', 'Bearer reviewer').expect(400);
     await http.get('/gasoline/chemical-properties?month=2026-11').set('Authorization', 'Bearer reviewer').expect(200, [{
       id: 'property-1', name: 'Test Pool', city: 'Tampa', assigned: ['Official Driver'],

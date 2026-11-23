@@ -9,12 +9,12 @@ export function allowedAreas(role: AppRole) {
     return ['home', 'commercial', 'opportunities', 'chemicals', 'health', 'reports', 'gasoline', 'complaints', 'quality'] as const;
   }
   if (role === 'QUALITY') {
-    return ['home', 'quality'] as const;
+    return ['home', 'gasoline', 'quality'] as const;
   }
   if (role === 'REPORTS') {
     return ['home', 'reports', 'gasoline', 'quality'] as const;
   }
-  if (role === 'COMMERCIAL') return ['home', 'commercial', 'opportunities'] as const;
-  if (role === 'CHEMICALS') return ['home', 'commercial', 'chemicals'] as const;
-  return ['home', role.toLowerCase()] as const;
+  if (role === 'COMMERCIAL') return ['home', 'commercial', 'opportunities', 'gasoline'] as const;
+  if (role === 'CHEMICALS') return ['home', 'commercial', 'chemicals', 'gasoline'] as const;
+  return ['home', role.toLowerCase(), 'gasoline'] as const;
 }
