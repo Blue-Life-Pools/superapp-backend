@@ -36,6 +36,19 @@ describe('Opportunities HTTP scope and intake', () => {
     await http.get('/opportunities/integration').set('Authorization', authorization).expect(403);
     await http.post('/opportunities/mail/sync').set('Authorization', authorization).expect(403);
   });
+  it('lets Reports update the status without accepting changes to other fields', async () => {
+    const http = request(app.getHttpServer());
+    const path = '/opportunities/existing/status';
+    const authorization = 'Bearer REPORTS';
+    await http.patch(path).send({ status: 'Accepted' }).expect(401);
+    await http.patch(path).set('Authorization', 'Bearer QUALITY').send({ status: 'Accepted' }).expect(403);
+    await http.patch(path).set('Authorization', authorization).send({ status: 'Accepted', estimateAmount: '400' }).expect(400);
+    await http.patch(path).set('Authorization', authorization).send({}).expect(400);
+    await http.patch(path).set('Authorization', authorization).send({ status: 'Accepted' }).expect(200);
+    expect(prisma.opportunity.update.mock.calls.at(-1)[0].data).toEqual({ status: 'Accepted' });
+    await http.patch(path).set('Authorization', authorization).send({ status: null }).expect(200);
+    expect(prisma.opportunity.update.mock.calls.at(-1)[0].data).toEqual({ status: null });
+  });
   it('restricts deletion to administrators and does not expose source metadata or credentials in ordinary responses', async () => {
     await request(app.getHttpServer()).delete('/opportunities/existing').set('Authorization', 'Bearer COMMERCIAL').expect(403);
     await request(app.getHttpServer()).delete('/opportunities/existing').set('Authorization', 'Bearer SUPER_ADMIN').expect(200);

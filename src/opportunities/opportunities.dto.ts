@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsISO8601, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsISO8601, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 
 export class OpportunityInputDto {
@@ -27,6 +27,9 @@ export class OpportunityInputDto {
   @IsOptional() @IsString() @MaxLength(100) invoiceTime?: string | null;
 }
 export class UpdateOpportunityDto extends PartialType(OpportunityInputDto) {}
+export class UpdateOpportunityStatusDto {
+  @ValidateIf((_body, status) => status !== null) @IsString() @MaxLength(80) status!: string | null;
+}
 export class OpportunityMailSettingsDto {
   @IsBoolean() enabled!: boolean;
 }
