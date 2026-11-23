@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -21,6 +22,7 @@ import { CreateProposalFollowUpDto } from './dto/create-proposal-follow-up.dto';
 import { UpdateSalesActivityStatusDto } from './dto/update-sales-activity-status.dto';
 import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
+import { ProposalChemicalEstimateDto } from './dto/proposal-chemical-estimate.dto';
 import { Roles } from '../auth/auth.decorators';
 
 @Controller('properties')
@@ -50,6 +52,13 @@ export class PropertiesController {
   @Roles('COMMERCIAL')
   proposalContext(@Param('id') id: string) {
     return this.propertiesService.proposalContext(id);
+  }
+
+  @Post(':id/proposal-chemical-estimate')
+  @HttpCode(200)
+  @Roles('COMMERCIAL')
+  proposalChemicalEstimate(@Param('id') id: string, @Body() data: ProposalChemicalEstimateDto) {
+    return this.propertiesService.proposalChemicalEstimate(id, data);
   }
 
   @Get(':id')

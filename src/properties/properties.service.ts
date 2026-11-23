@@ -17,6 +17,8 @@ import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
 import { EmailDraftsService } from '../email-drafts/email-drafts.service';
 import { proposalHistoryWindow, summarizeProposalHistory } from './proposal-context';
+import { estimateProposalChemicals } from './proposal-chemical-estimate';
+import { ProposalChemicalEstimateDto } from './dto/proposal-chemical-estimate.dto';
 import { withInternalProposalName } from './proposal-internal-name';
 
 type UploadedImageFile = {
@@ -132,6 +134,21 @@ export class PropertiesService {
       orderBy: { month: 'asc' },
     });
     return { ...summarizeProposalHistory(periods), window };
+  }
+
+  async proposalChemicalEstimate(id: string, data: ProposalChemicalEstimateDto) {
+    const property = await this.prisma.property.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+    if (!property) throw new NotFoundException('Property not found');
+    const window = proposalHistoryWindow();
+    const periods = { month: { gte: window.from, lt: window.before }, sourceName: { not: null } };
+    const candidates = await this.prisma.property.findMany({
+      where: { id: { not: id }, deletedAt: null, chemicalConsumptionPeriods: { some: periods } },
+      select: {
+        waterBodies: { where: { active: true }, select: { type: true, size: true, gallons: true } },
+        chemicalConsumptionPeriods: { where: periods, select: { sourceName: true, chemicals: true } },
+      },
+    });
+    return { estimate: estimateProposalChemicals(data.waterBodies, candidates), window };
   }
 
   async findOne(id: string) {
