@@ -1,11 +1,13 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { CreateWaterBodyDto } from '../../properties/dto/create-water-body.dto';
 
 export class ConsumptionTechnicianUsageDto {
   @IsString() @MaxLength(200) name!: string;
   @IsNumber() @Min(0) quantity!: number;
   @IsNumber() @Min(0) cost!: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(31) @IsDateString({ strict: true }, { each: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { each: true }) serviceDates?: string[];
 }
 export class ConsumptionChemicalDto {
   @IsString() @MaxLength(120) name!: string;

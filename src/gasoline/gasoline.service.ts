@@ -26,6 +26,44 @@ export class GasolineService {
     return { purchases, routes: Object.fromEntries(routes.map(({ id, ...route }) => [id, route])) };
   }
 
+  async chemicalProperties(month: string) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new BadRequestException('Select a valid report month.');
+    const periods = await this.prisma.chemicalConsumptionPeriod.findMany({
+      where: { month, property: { deletedAt: null }, OR: [{ sourceName: { not: null } }, { technicianOverride: { not: null } }] },
+      select: {
+        propertyId: true, technicianOverride: true, sourceName: true, chemicals: true,
+        property: { select: { name: true, city: true, waterBodies: { where: { active: true, technicianName: { not: null } }, select: { technicianName: true } } } },
+      },
+      orderBy: { property: { name: 'asc' } },
+    });
+    return periods.map(period => {
+      const manual = period.technicianOverride?.trim();
+      const assigned = manual ? [manual]
+        : [...new Set(period.property.waterBodies.flatMap(body => body.technicianName?.trim() || []))];
+      const participants = new Map<string, Set<string>>();
+      if (period.sourceName && Array.isArray(period.chemicals)) {
+        for (const chemical of period.chemicals) {
+          const usages = (chemical as { technicians?: unknown } | null)?.technicians;
+          if (!Array.isArray(usages)) continue;
+          for (const usage of usages) {
+            const name = typeof usage?.name === 'string' ? usage.name.trim() : '';
+            if (!name) continue;
+            const recorded: string[] = Array.isArray(usage.serviceDates)
+              ? usage.serviceDates.filter((date: unknown) => typeof date === 'string' && date.startsWith(month + '-') && /^\d{4}-\d{2}-\d{2}$/.test(date)) : [];
+            if (!recorded.length && !(usage.quantity > 0 || usage.cost > 0)) continue;
+            const dates = participants.get(name) ?? new Set<string>();
+            recorded.forEach(date => dates.add(date));
+            participants.set(name, dates);
+          }
+        }
+      }
+      return {
+        id: period.propertyId, name: period.property.name, city: period.property.city, assigned,
+        participants: [...participants].map(([name, dates]) => ({ name, dates: [...dates].sort() })),
+      };
+    });
+  }
+
   async importReport({ purchases, routes }: ImportGasolineDto) {
     const routeRecords = routes?.map(routeRecord) ?? [];
     const [imported, importedRoutes] = await this.prisma.$transaction([

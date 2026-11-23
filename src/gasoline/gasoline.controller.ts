@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { Roles } from '../auth/auth.decorators';
 import { GasolineRouteDto, ImportGasolineDto } from './gasoline.dto';
 import { GasolineService } from './gasoline.service';
@@ -11,6 +11,11 @@ export class GasolineController {
   @Get()
   history() {
     return this.gasoline.history();
+  }
+
+  @Get('chemical-properties')
+  chemicalProperties(@Query('month') month: string) {
+    return this.gasoline.chemicalProperties(month);
   }
 
   @Post('import')

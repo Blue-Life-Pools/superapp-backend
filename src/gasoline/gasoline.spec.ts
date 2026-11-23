@@ -36,6 +36,14 @@ describe('Shared gasoline history', () => {
         } } },
         { provide: PrismaService, useValue: {
           $transaction: (queries: Promise<unknown>[]) => Promise.all(queries),
+          chemicalConsumptionPeriod: { findMany: ({ where }: { where: { month: string } }) => Promise.resolve(where.month === '2026-11' ? [{
+            propertyId: 'property-1', sourceName: 'Skimmer', technicianOverride: 'Official Driver',
+            property: { name: 'Test Pool', city: 'Tampa', waterBodies: [{ technicianName: 'Other assignment' }] },
+            chemicals: [
+              { technicians: [{ name: 'Cover Driver', quantity: 4, cost: 8, serviceDates: ['2026-11-04'] }, { name: 'Legacy Driver', quantity: 1, cost: 2 }] },
+              { technicians: [{ name: 'Cover Driver', quantity: 1, cost: 2, serviceDates: ['2026-11-04', '2026-10-31'] }] },
+            ],
+          }] : []) },
           gasolinePurchase: {
             findMany: () => Promise.resolve([...purchases.values()]),
             createMany: ({ data }: { data: typeof purchase[] }) => insert(purchases, data),
@@ -78,5 +86,15 @@ describe('Shared gasoline history', () => {
     const http = request(app.getHttpServer());
     await http.put('/gasoline/route').set('Authorization', 'Bearer reviewer').send({ ...route, properties: 0 }).expect(400);
     await http.put('/gasoline/route').set('Authorization', 'Bearer reviewer').send({ ...route, first: '2026-11-15' }).expect(400);
+  });
+
+  it('returns only authorized, month-scoped property assignments and distinct service dates', async () => {
+    const http = request(app.getHttpServer());
+    await http.get('/gasoline/chemical-properties?month=2026-11').set('Authorization', 'Bearer other').expect(403);
+    await http.get('/gasoline/chemical-properties?month=2026-99').set('Authorization', 'Bearer reviewer').expect(400);
+    await http.get('/gasoline/chemical-properties?month=2026-11').set('Authorization', 'Bearer reviewer').expect(200, [{
+      id: 'property-1', name: 'Test Pool', city: 'Tampa', assigned: ['Official Driver'],
+      participants: [{ name: 'Cover Driver', dates: ['2026-11-04'] }, { name: 'Legacy Driver', dates: [] }],
+    }]);
   });
 });
