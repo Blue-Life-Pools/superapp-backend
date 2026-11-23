@@ -19,10 +19,22 @@ describe('Opportunities HTTP scope and intake', () => {
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
-  it('allows Commercial, Super Admin and Operations Director, while rejecting unrelated areas and anonymous requests', async () => {
+  it('allows Commercial, Reports and administrators to read the list, while rejecting unrelated areas and anonymous requests', async () => {
     await request(app.getHttpServer()).get('/opportunities').expect(401);
-    for (const role of ['COMMERCIAL', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities').set('Authorization', `Bearer ${role}`).expect(200);
-    for (const role of ['QUALITY', 'HEALTH', 'REPORTS', 'CHEMICALS']) await request(app.getHttpServer()).get('/opportunities').set('Authorization', `Bearer ${role}`).expect(403);
+    for (const role of ['COMMERCIAL', 'REPORTS', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities').set('Authorization', `Bearer ${role}`).expect(200);
+    for (const role of ['QUALITY', 'HEALTH', 'CHEMICALS']) await request(app.getHttpServer()).get('/opportunities').set('Authorization', `Bearer ${role}`).expect(403);
+  });
+  it('lets Reports read details and export without granting edits, imports or mailbox administration', async () => {
+    const http = request(app.getHttpServer());
+    const authorization = 'Bearer REPORTS';
+    await http.get('/opportunities/existing').set('Authorization', authorization).expect(200);
+    await http.get('/opportunities/export').set('Authorization', authorization).expect(200);
+    await http.post('/opportunities').set('Authorization', authorization).send({ propertyName: 'Property' }).expect(403);
+    await http.patch('/opportunities/existing').set('Authorization', authorization).send({ status: 'Accepted' }).expect(403);
+    await http.delete('/opportunities/existing').set('Authorization', authorization).expect(403);
+    await http.post('/opportunities/import').set('Authorization', authorization).expect(403);
+    await http.get('/opportunities/integration').set('Authorization', authorization).expect(403);
+    await http.post('/opportunities/mail/sync').set('Authorization', authorization).expect(403);
   });
   it('restricts deletion to administrators and does not expose source metadata or credentials in ordinary responses', async () => {
     await request(app.getHttpServer()).delete('/opportunities/existing').set('Authorization', 'Bearer COMMERCIAL').expect(403);
@@ -59,10 +71,10 @@ describe('Opportunities HTTP scope and intake', () => {
     await request(app.getHttpServer()).patch('/opportunities/mail').set('Authorization', 'Bearer COMMERCIAL').send({ enabled: 'yes' }).expect(400);
     await request(app.getHttpServer()).get('/opportunities/mail/review').set('Authorization', 'Bearer COMMERCIAL').expect(200);
   });
-  it('protects the approved map with the same Commercial access and validates its filters', async () => {
+  it('protects the approved map with the same read access and validates its filters', async () => {
     await request(app.getHttpServer()).get('/opportunities/approved-map').expect(401);
     await request(app.getHttpServer()).get('/opportunities/approved-map').set('Authorization', 'Bearer QUALITY').expect(403);
-    for (const role of ['COMMERCIAL', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities/approved-map').set('Authorization', `Bearer ${role}`).expect(200);
+    for (const role of ['COMMERCIAL', 'REPORTS', 'SUPER_ADMIN', 'OPERATIONS_DIRECTOR']) await request(app.getHttpServer()).get('/opportunities/approved-map').set('Authorization', `Bearer ${role}`).expect(200);
     await request(app.getHttpServer()).get('/opportunities/approved-map?from=bad').set('Authorization', 'Bearer COMMERCIAL').expect(400);
   });
 });
