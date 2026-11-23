@@ -36,6 +36,11 @@ describe('Shared gasoline history', () => {
         } } },
         { provide: PrismaService, useValue: {
           $transaction: (queries: Promise<unknown>[]) => Promise.all(queries),
+          gasolinePropertyArchive: {
+            findMany: () => Promise.resolve([{ month: '2025-01', propertyCount: 1 }]),
+            findUnique: ({ where }: { where: { month: string } }) => Promise.resolve(where.month === '2025-01'
+              ? { properties: [{ name: 'Archived Pool', address: '123 Main St' }] } : null),
+          },
           chemicalConsumptionPeriod: { findMany: ({ where }: { where: { month: string } }) => Promise.resolve(where.month === '2026-11' ? [{
             propertyId: 'property-1', sourceName: 'Skimmer', technicianOverride: 'Official Driver',
             property: { name: 'Test Pool', city: 'Tampa', waterBodies: [{ technicianName: 'Other assignment' }] },
@@ -79,7 +84,16 @@ describe('Shared gasoline history', () => {
     await http.get('/gasoline').set('Authorization', 'Bearer reviewer').expect(200, {
       purchases: [purchase],
       routes: { [JSON.stringify([route.first, route.last, route.driver])]: { zone: 'Tampa', properties: 6, miles: 100 } },
+      archivedPropertyCounts: { '2025-01': 1 },
     });
+  });
+
+  it('loads archived property records only through the authorized Gasoline route', async () => {
+    const http = request(app.getHttpServer());
+    await http.get('/gasoline/archived-properties?month=2025-01').set('Authorization', 'Bearer other').expect(403);
+    await http.get('/gasoline/archived-properties?month=2025-99').set('Authorization', 'Bearer reviewer').expect(400);
+    await http.get('/gasoline/archived-properties?month=2025-01').set('Authorization', 'Bearer reviewer')
+      .expect(200, [{ name: 'Archived Pool', address: '123 Main St' }]);
   });
 
   it('rejects invalid route counts and reversed date ranges', async () => {

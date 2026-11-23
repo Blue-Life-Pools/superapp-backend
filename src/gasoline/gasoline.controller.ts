@@ -18,6 +18,11 @@ export class GasolineController {
     return this.gasoline.chemicalProperties(month);
   }
 
+  @Get('archived-properties')
+  archivedProperties(@Query('month') month: string) {
+    return this.gasoline.archivedProperties(month);
+  }
+
   @Post('import')
   importReport(@Body() data: ImportGasolineDto) {
     return this.gasoline.importReport(data);

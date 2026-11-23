@@ -19,11 +19,22 @@ export class GasolineService {
   constructor(private readonly prisma: PrismaService) {}
 
   async history() {
-    const [purchases, routes] = await this.prisma.$transaction([
+    const [purchases, routes, propertyArchive] = await this.prisma.$transaction([
       this.prisma.gasolinePurchase.findMany({ orderBy: [{ date: 'asc' }, { id: 'asc' }] }),
       this.prisma.gasolineRoute.findMany(),
+      this.prisma.gasolinePropertyArchive.findMany({ select: { month: true, propertyCount: true } }),
     ]);
-    return { purchases, routes: Object.fromEntries(routes.map(({ id, ...route }) => [id, route])) };
+    return {
+      purchases,
+      routes: Object.fromEntries(routes.map(({ id, ...route }) => [id, route])),
+      archivedPropertyCounts: Object.fromEntries(propertyArchive.map(({ month, propertyCount }) => [month, propertyCount])),
+    };
+  }
+
+  async archivedProperties(month: string) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new BadRequestException('Select a valid report month.');
+    const archive = await this.prisma.gasolinePropertyArchive.findUnique({ where: { month }, select: { properties: true } });
+    return archive?.properties ?? [];
   }
 
   async chemicalProperties(month: string) {

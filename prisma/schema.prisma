@@ -698,3 +698,9 @@ model GasolineRoute {
   properties Int?
   miles      Float?
 }
+
+model GasolinePropertyArchive {
+  month         String @id
+  propertyCount Int
+  properties    Json
+}
