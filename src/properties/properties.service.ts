@@ -17,6 +17,7 @@ import { UpdateSalesActivityDto } from './dto/update-sales-activity.dto';
 import { CreateProposalEmailDraftDto } from './dto/create-proposal-email-draft.dto';
 import { EmailDraftsService } from '../email-drafts/email-drafts.service';
 import { proposalHistoryWindow, summarizeProposalHistory } from './proposal-context';
+import { getProposalDrivingDistance } from './proposal-route';
 import { estimateProposalChemicals } from './proposal-chemical-estimate';
 import { ProposalChemicalEstimateDto } from './dto/proposal-chemical-estimate.dto';
 import { withInternalProposalName } from './proposal-internal-name';
@@ -149,6 +150,15 @@ export class PropertiesService {
       },
     });
     return { estimate: estimateProposalChemicals(data.waterBodies, candidates), window };
+  }
+
+  async proposalRoute(id: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, deletedAt: null },
+      select: { addressLine1: true, city: true, state: true, zipCode: true, latitude: true, longitude: true },
+    });
+    if (!property) throw new NotFoundException('Property not found');
+    return getProposalDrivingDistance(property);
   }
 
   async findOne(id: string) {

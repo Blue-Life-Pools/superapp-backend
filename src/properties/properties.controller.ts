@@ -54,6 +54,12 @@ export class PropertiesController {
     return this.propertiesService.proposalContext(id);
   }
 
+  @Get(':id/proposal-route')
+  @Roles('COMMERCIAL')
+  proposalRoute(@Param('id') id: string) {
+    return this.propertiesService.proposalRoute(id);
+  }
+
   @Post(':id/proposal-chemical-estimate')
   @HttpCode(200)
   @Roles('COMMERCIAL')
