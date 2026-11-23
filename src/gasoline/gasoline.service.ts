@@ -19,15 +19,17 @@ export class GasolineService {
   constructor(private readonly prisma: PrismaService) {}
 
   async history() {
-    const [purchases, routes, propertyArchive] = await this.prisma.$transaction([
+    const [purchases, routes, propertyArchive, activeTechnicians] = await this.prisma.$transaction([
       this.prisma.gasolinePurchase.findMany({ orderBy: [{ date: 'asc' }, { id: 'asc' }] }),
       this.prisma.gasolineRoute.findMany(),
       this.prisma.gasolinePropertyArchive.findMany({ select: { month: true, propertyCount: true } }),
+      this.prisma.chemicalTechnician.findMany({ where: { active: true }, select: { name: true } }),
     ]);
     return {
       purchases,
       routes: Object.fromEntries(routes.map(({ id, ...route }) => [id, route])),
       archivedPropertyCounts: Object.fromEntries(propertyArchive.map(({ month, propertyCount }) => [month, propertyCount])),
+      activeTechnicians: activeTechnicians.map(({ name }) => name),
     };
   }
 

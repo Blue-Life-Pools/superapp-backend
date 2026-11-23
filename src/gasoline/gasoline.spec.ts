@@ -38,6 +38,10 @@ describe('Shared gasoline history', () => {
         } } },
         { provide: PrismaService, useValue: {
           $transaction: (queries: Promise<unknown>[]) => Promise.all(queries),
+          chemicalTechnician: { findMany: ({ where }: { where: { active: boolean } }) => {
+            expect(where).toEqual({ active: true });
+            return Promise.resolve([{ name: '01 Active Driver' }]);
+          } },
           gasolinePropertyArchive: {
             findMany: () => Promise.resolve([{ month: '2025-01', propertyCount: 1 }]),
             findUnique: ({ where }: { where: { month: string } }) => Promise.resolve(where.month === '2025-01'
@@ -86,6 +90,7 @@ describe('Shared gasoline history', () => {
       purchases: [purchase],
       routes: { [JSON.stringify([route.first, route.last, route.driver])]: { zone: 'Tampa', properties: 6, miles: 100 } },
       archivedPropertyCounts: { '2025-01': 1 },
+      activeTechnicians: ['01 Active Driver'],
     });
   });
 
