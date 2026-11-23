@@ -6,13 +6,13 @@ export const APP_ROLES_KEY = 'appRoles';
 
 export function allowedAreas(role: AppRole) {
   if (role === 'SUPER_ADMIN' || role === 'OPERATIONS_DIRECTOR') {
-    return ['home', 'commercial', 'opportunities', 'chemicals', 'health', 'reports', 'complaints', 'quality'] as const;
+    return ['home', 'commercial', 'opportunities', 'chemicals', 'health', 'reports', 'gasoline', 'complaints', 'quality'] as const;
   }
   if (role === 'QUALITY') {
     return ['home', 'quality'] as const;
   }
   if (role === 'REPORTS') {
-    return ['home', 'reports', 'quality'] as const;
+    return ['home', 'reports', 'gasoline', 'quality'] as const;
   }
   if (role === 'COMMERCIAL') return ['home', 'commercial', 'opportunities'] as const;
   if (role === 'CHEMICALS') return ['home', 'commercial', 'chemicals'] as const;

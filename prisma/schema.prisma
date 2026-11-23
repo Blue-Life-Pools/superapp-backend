@@ -678,3 +678,23 @@ model ReportUploadSession {
 
   @@index([incidentId, createdAt])
 }
+
+model GasolinePurchase {
+  id            String @id
+  date          String
+  driver        String
+  city          String
+  product       String
+  gallons       Float
+  cents         Int
+  reportedMiles Float?
+
+  @@index([date])
+}
+
+model GasolineRoute {
+  id         String @id
+  zone       String
+  properties Int?
+  miles      Float?
+}

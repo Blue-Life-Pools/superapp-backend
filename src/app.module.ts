@@ -9,6 +9,7 @@ import { PropertiesModule } from './properties/properties.module';
 import { ChemicalsModule } from './chemicals/chemicals.module';
 import { HealthDepartmentModule } from './health-department/health-department.module';
 import { ReportsModule } from './reports/reports.module';
+import { GasolineModule } from './gasoline/gasoline.module';
 import { AuthModule } from './auth/auth.module';
 import { ComplaintsModule } from './complaints/complaints.module';
 import { QualityInspectionsModule } from './quality-inspections/quality-inspections.module';
@@ -25,6 +26,7 @@ import { OpportunitiesModule } from './opportunities/opportunities.module';
     ChemicalsModule,
     HealthDepartmentModule,
     ReportsModule,
+    GasolineModule,
     AuthModule,
     ComplaintsModule,
     QualityInspectionsModule,
