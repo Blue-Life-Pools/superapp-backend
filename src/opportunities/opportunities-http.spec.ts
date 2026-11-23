@@ -20,17 +20,22 @@ describe('Opportunities HTTP scope and intake', () => {
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })); await app.init();
   });
   afterAll(async () => app.close());
-  it('lists repairs without an invoice and only lets existing editors record it atomically', async () => {
+  it('lets Chemicals register an invoice and gives Reports read-only access to the queue', async () => {
     const http = request(app.getHttpServer());
     const path = '/opportunities/existing/invoice';
     const invoice = { invoiceNumber: 'INV-001', invoiceAmount: '150.25', invoiceDate: '2026-11-20' };
     const ready = { deletedAt: null, status: { equals: 'Repair Done', mode: 'insensitive' }, OR: [{ invoiceNumber: null }, { invoiceNumber: '' }] };
     await http.get('/opportunities/pending-invoices').expect(401);
     await http.get('/opportunities/pending-invoices').set('Authorization', 'Bearer REPORTS').expect(200);
+    await http.get('/opportunities/pending-invoices').set('Authorization', 'Bearer CHEMICALS').expect(200);
     expect(prisma.opportunity.findMany.mock.calls.at(-1)[0].where).toEqual(ready);
     await http.patch(path).set('Authorization', 'Bearer REPORTS').send(invoice).expect(403);
     await http.patch(path).set('Authorization', 'Bearer COMMERCIAL').send({ ...invoice, invoiceDate: '2026-11-31' }).expect(400);
     await http.patch(path).set('Authorization', 'Bearer COMMERCIAL').send(invoice).expect(200, { id: 'existing' });
+    await http.patch('/opportunities/existing/status').set('Authorization', 'Bearer CHEMICALS').send({ status: 'Pending' }).expect(403);
+    await http.patch('/opportunities/existing').set('Authorization', 'Bearer CHEMICALS').send({ name: 'Changed' }).expect(403);
+    await http.patch(path).set('Authorization', 'Bearer CHEMICALS').send({ ...invoice, name: 'Changed' }).expect(400);
+    await http.patch(path).set('Authorization', 'Bearer CHEMICALS').send(invoice).expect(200, { id: 'existing' });
     expect(prisma.opportunity.updateMany).toHaveBeenLastCalledWith({
       where: { id: 'existing', ...ready },
       data: { ...invoice, invoiceDate: new Date('2026-11-20T00:00:00Z'), status: 'Converted' },
