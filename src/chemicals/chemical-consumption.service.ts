@@ -8,9 +8,23 @@ import { historicalChemicals, historicalRange, matchConsumptionHistory } from '.
 import type { HistoryProperty } from './consumption-history.types';
 import { companyConsumptionReport, globalCompanyConsumptionReport, companyMaximumBaseProperties } from './consumption-company-report';
 import { matchConsumptionProperties } from './consumption-property-matching';
+import { productKey, unitKey } from './consumption-products';
 
 const propertySelect = { id: true, name: true, code: true, lifecycleStatus: true, updatedAt: true, waterBodies: true, chemicalFollowUpResolvedAt: true, chemicalFollowUpResolution: true } as const;
 const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function technicianCoverage(chemicals: ConsumptionChemicalDto[]) {
+  const coverage = new Map<string, { quantity: number; assigned: number }>();
+  for (const chemical of chemicals) {
+    const key = `${productKey(chemical.name)}|${unitKey(chemical.unit)}`;
+    const totals = coverage.get(key) ?? { quantity: 0, assigned: 0 };
+    totals.quantity += chemical.quantity;
+    totals.assigned += (chemical.technicians ?? []).reduce((sum, usage) => sum + (usage.name.trim() ? usage.quantity : 0), 0);
+    coverage.set(key, totals);
+  }
+  return coverage;
+}
+
 @Injectable()
 export class ChemicalConsumptionService {
   constructor(private readonly prisma: PrismaService) {}
@@ -160,12 +174,33 @@ export class ChemicalConsumptionService {
     const accepted = preview.filter((row) => row.matchedProperty && (!row.existing || data.replace));
     if (new Set(accepted.map((row) => row.matchedProperty!.id)).size !== accepted.length) throw new BadRequestException('The import contains more than one total for the same property. Combine those rows before importing.');
     await this.prisma.$transaction(async (tx) => {
+      const chemicalRows = accepted.filter((row) => row.chemicals !== undefined);
+      if (chemicalRows.length) {
+        const stored = await tx.chemicalConsumptionPeriod.findMany({
+          where: { month: data.month, propertyId: { in: chemicalRows.map((row) => row.matchedProperty!.id) } },
+          select: { propertyId: true, sourceName: true, chemicals: true },
+        });
+        const previous = new Map(stored.map((period) => [period.propertyId, period]));
+        for (const row of chemicalRows) {
+          const period = previous.get(row.matchedProperty!.id);
+          if (!period?.sourceName || !Array.isArray(period.chemicals)) continue;
+          if (!data.replace) throw new BadRequestException('Chemical consumption changed while the import was open. Refresh the preview and try again.');
+          const before = technicianCoverage(period.chemicals as unknown as ConsumptionChemicalDto[]);
+          const incoming = technicianCoverage(row.chemicals!);
+          const losesDetail = [...before].some(([key, prior]) => {
+            const next = incoming.get(key);
+            if (!next) return !incoming.size && prior.assigned > .0001;
+            return next.quantity - next.assigned > .0001 && prior.assigned - next.assigned > .0001;
+          });
+          if (losesDetail) throw new BadRequestException(`${row.matchedProperty!.name}: this import would remove recorded technician detail. Choose the detailed Skimmer report and try again.`);
+        }
+      }
       for (const row of accepted) {
         const propertyId = row.matchedProperty!.id;
         const values = { ...(row.monthlyFee === undefined ? {} : { monthlyFee: row.monthlyFee, feeSource: data.sourceName }), ...(row.chemicals === undefined ? {} : { chemicals: row.chemicals as unknown as Prisma.InputJsonValue, sourceName: data.sourceName }) };
         await tx.chemicalConsumptionPeriod.upsert({ where: { propertyId_month: { propertyId, month: data.month } }, update: values, create: { propertyId, month: data.month, ...values } });
       }
-    }, { timeout: 60000, maxWait: 10000 });
+    }, { timeout: 60000, maxWait: 10000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return { imported: accepted.length, skipped: preview.length - accepted.length };
   }
   async update(propertyId: string, month: string, data: UpdateConsumptionPeriodDto) {

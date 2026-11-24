@@ -1,6 +1,42 @@
 import { ChemicalConsumptionService } from './chemical-consumption.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+describe('Skimmer replacement imports', () => {
+  const month = '2026-10';
+  const property = { id: 'property', name: 'Example Pool', code: 'EXAMPLE' };
+  const dosage = (name: string, quantity: number, assigned: number) => ({
+    name, unit: 'gal', quantity, cost: quantity * 2,
+    ...(assigned ? { technicians: [{ name: 'Sample Technician', quantity: assigned, cost: assigned * 2 }] } : {}),
+  });
+  function setup() {
+    const previous = { propertyId: property.id, sourceName: 'detailed.pdf', chemicals: [dosage('Liquid Chlorine', 10, 10)] };
+    const chemicalConsumptionPeriod = { findMany: jest.fn().mockResolvedValue([previous]), upsert: jest.fn().mockResolvedValue(previous) };
+    const prisma = {
+      chemicalConsumptionPeriod,
+      property: { findMany: jest.fn().mockResolvedValue([property]) },
+      $transaction: jest.fn().mockImplementation(async (run) => run({ chemicalConsumptionPeriod })),
+    };
+    const service = new ChemicalConsumptionService(prisma as unknown as PrismaService);
+    return { chemicalConsumptionPeriod, service };
+  }
+  const replacement = (quantity: number, assigned: number) => ({
+    month, sourceName: 'replacement.pdf', replace: true,
+    rows: [{ propertyName: property.name, code: property.code, chemicals: [dosage('Liquid', quantity, assigned)] }],
+  });
+
+  it('rejects a partial replacement even when the chemical uses a different label', async () => {
+    const { chemicalConsumptionPeriod, service } = setup();
+    await expect(service.import(replacement(10, 4))).rejects.toThrow('Example Pool: this import would remove recorded technician detail.');
+    expect(chemicalConsumptionPeriod.upsert).not.toHaveBeenCalled();
+  });
+
+  it('accepts a fully attributed correction with lower consumption', async () => {
+    const { chemicalConsumptionPeriod, service } = setup();
+    await expect(service.import(replacement(7, 7))).resolves.toEqual({ imported: 1, skipped: 0 });
+    expect(chemicalConsumptionPeriod.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('Home consumption history periods', () => {
   const property = { id: 'property', name: 'Example Pool', code: 'EXAMPLE', waterBodies: [], chemicalFollowUpResolvedAt: null };
   const period = (month: string, quantity = 12, maximum = 10, sourceName: string | null = 'skimmer.pdf') => ({
