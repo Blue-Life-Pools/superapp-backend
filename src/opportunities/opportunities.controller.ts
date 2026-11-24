@@ -5,7 +5,7 @@ import { Public, Roles } from '../auth/auth.decorators';
 import { OpportunitiesService } from './opportunities.service';
 import { OpportunitiesMailService } from './opportunities-mail.service';
 import { OpportunitiesMailEventsService } from './opportunities-mail-events.service';
-import { AutomationOpportunityDto, LinkOpportunityEmailDto, OpportunityInputDto, OpportunityMailSettingsDto, OpportunityQueryDto, RecordOpportunityInvoiceDto, UpdateOpportunityDto, UpdateOpportunityStatusDto } from './opportunities.dto';
+import { AutomationOpportunityDto, LinkOpportunityEmailDto, OpportunityInputDto, OpportunityMailSettingsDto, OpportunityQueryDto, RecordOpportunityInvoiceDto, UpdateOpportunityDto, UpdateOpportunityStatusDto, UpdateOpportunityWorkDto } from './opportunities.dto';
 
 @Controller('opportunities')
 @Roles('COMMERCIAL')
@@ -40,6 +40,10 @@ export class OpportunitiesController {
   @Patch(':id/status') @Roles('COMMERCIAL', 'REPORTS')
   updateStatus(@Param('id') id: string, @Body() body: UpdateOpportunityStatusDto) {
     return this.opportunities.update(id, { status: body.status });
+  }
+  @Patch(':id/work') @Roles('REPORTS')
+  updateWork(@Param('id') id: string, @Body() body: UpdateOpportunityWorkDto) {
+    return this.opportunities.update(id, body);
   }
   @Patch(':id') update(@Param('id') id: string, @Body() body: UpdateOpportunityDto) { return this.opportunities.update(id, body); }
   @Delete(':id') @Roles('SUPER_ADMIN') remove(@Param('id') id: string) { return this.opportunities.remove(id); }

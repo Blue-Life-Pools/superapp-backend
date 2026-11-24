@@ -73,6 +73,19 @@ describe('Opportunities HTTP scope and intake', () => {
     await http.patch(path).set('Authorization', authorization).send({ status: null }).expect(200);
     expect(prisma.opportunity.update.mock.calls.at(-1)[0].data).toEqual({ status: null });
   });
+  it('lets Reports edit work details while restricting invoice fields and other roles', async () => {
+    const http = request(app.getHttpServer());
+    const path = '/opportunities/existing/work';
+    const work = { name: 'Updated repair', categories: ['Filter'], actualRepairDate: '2026-11-20' };
+    await http.patch(path).set('Authorization', 'Bearer CHEMICALS').send(work).expect(403);
+    for (const field of ['invoiceNumber', 'invoiceAmount', 'invoiceDate', 'invoiceTime']) {
+      await http.patch(path).set('Authorization', 'Bearer REPORTS').send({ ...work, [field]: null }).expect(400);
+    }
+    await http.patch(path).set('Authorization', 'Bearer REPORTS').send(work).expect(200);
+    expect(prisma.opportunity.update.mock.calls.at(-1)[0].data).toEqual({
+      ...work, actualRepairDate: new Date('2026-11-20T00:00:00Z'),
+    });
+  });
   it('restricts deletion to administrators and does not expose source metadata or credentials in ordinary responses', async () => {
     await request(app.getHttpServer()).delete('/opportunities/existing').set('Authorization', 'Bearer COMMERCIAL').expect(403);
     await request(app.getHttpServer()).delete('/opportunities/existing').set('Authorization', 'Bearer SUPER_ADMIN').expect(200);
